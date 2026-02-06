@@ -121,6 +121,9 @@ const ContractsView: React.FC = () => {
   const [newCustomTag, setNewCustomTag] = useState({ name: '', tag: '', options: '' });
   const [copySuccess, setCopySuccess] = useState(false);
 
+  // State for mobile tags panel
+  const [showMobileTags, setShowMobileTags] = React.useState(false);
+
   // Fetch data
   useEffect(() => {
     fetchContracts();
@@ -131,25 +134,32 @@ const ContractsView: React.FC = () => {
   }, []);
 
   const fetchContracts = async () => {
-    const { data, error } = await supabase
-      .from('contracts')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      setContracts(data);
+      if (error) throw error;
+      if (data) setContracts(data);
+    } catch (error) {
+      console.error('Error fetching contracts:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchTemplates = async () => {
-    const { data, error } = await supabase
-      .from('contract_templates')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('contract_templates')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      setTemplates(data);
+      if (error) throw error;
+      if (data) setTemplates(data);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
     }
   };
 
@@ -334,35 +344,48 @@ const ContractsView: React.FC = () => {
   const saveTemplate = async () => {
     if (!templateName.trim() || !templateContent.trim()) return;
 
-    if (editingTemplateId) {
-      await supabase
-        .from('contract_templates')
-        .update({
-          name: templateName,
-          content: templateContent,
-          logo_url: templateLogoUrl || null,
-          watermark_url: templateWatermarkUrl || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editingTemplateId);
-    } else {
-      await supabase
-        .from('contract_templates')
-        .insert({
-          name: templateName,
-          content: templateContent,
-          logo_url: templateLogoUrl || null,
-          watermark_url: templateWatermarkUrl || null,
-        });
-    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
 
-    setTemplateName('');
-    setTemplateContent('');
-    setTemplateLogoUrl('');
-    setTemplateWatermarkUrl('');
-    setEditingTemplateId(null);
-    setViewMode('templates');
-    fetchTemplates();
+      if (editingTemplateId) {
+        const { error } = await supabase
+          .from('contract_templates')
+          .update({
+            name: templateName,
+            content: templateContent,
+            logo_url: templateLogoUrl || null,
+            watermark_url: templateWatermarkUrl || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingTemplateId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('contract_templates')
+          .insert({
+            name: templateName,
+            content: templateContent,
+            logo_url: templateLogoUrl || null,
+            watermark_url: templateWatermarkUrl || null,
+            user_id: user.id
+          });
+
+        if (error) throw error;
+      }
+
+      setTemplateName('');
+      setTemplateContent('');
+      setTemplateLogoUrl('');
+      setTemplateWatermarkUrl('');
+      setEditingTemplateId(null);
+      setViewMode('templates');
+      fetchTemplates();
+    } catch (error: any) {
+      console.error('Error saving template:', error);
+      alert('Erro ao salvar modelo: ' + (error.message || 'Erro desconhecido'));
+    }
   };
 
   const uploadImage = async (file: File, type: 'logo' | 'watermark') => {
@@ -505,43 +528,53 @@ const ContractsView: React.FC = () => {
   const createContract = async () => {
     if (!selectedTemplate) return;
 
-    const filledContent = generateFilledContent();
-    const clientInitials = newContractData.client_name
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    try {
+      const filledContent = generateFilledContent();
+      const clientInitials = newContractData.client_name
+        ? newContractData.client_name
+          .split(' ')
+          .map(n => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2)
+        : '??';
 
-    const shareToken = generateShareToken();
+      const shareToken = generateShareToken();
 
-    // Extract values from tags if direct fields are empty
-    const eventType = newContractData.type || tagValues['[Tipo de Evento]'] || 'Contrato';
-    const eventDate = newContractData.event_date || tagValues['[Data do Evento]'] || '';
-    const contractValue = newContractData.value || parseFloat(tagValues['[Valor Total]']?.replace(/[^\d,]/g, '').replace(',', '.') || '0') || 0;
+      // Extract values from tags if direct fields are empty
+      const eventType = newContractData.type || tagValues['[Tipo de Evento]'] || 'Contrato';
+      const eventDate = newContractData.event_date || tagValues['[Data do Evento]'] || '';
+      const contractValue = newContractData.value || parseFloat(tagValues['[Valor Total]']?.replace(/[^\d,]/g, '').replace(',', '.') || '0') || 0;
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado. Por favor, faça login novamente.');
 
-    await supabase.from('contracts').insert({
-      client_name: newContractData.client_name,
-      client_initials: clientInitials,
-      type: eventType,
-      event_date: eventDate,
-      value: contractValue,
-      status: 'draft',
-      template_id: selectedTemplate.id,
-      filled_content: filledContent,
-      share_token: shareToken,
-      lead_id: selectedLeadId || null,
-      user_id: user?.id,
-    });
+      const { error } = await supabase.from('contracts').insert({
+        client_name: newContractData.client_name || 'Cliente sem nome',
+        client_initials: clientInitials,
+        type: eventType,
+        event_date: eventDate || null,
+        value: contractValue,
+        status: 'draft',
+        template_id: selectedTemplate.id,
+        filled_content: filledContent,
+        share_token: shareToken,
+        lead_id: selectedLeadId || null,
+        user_id: user.id,
+      });
 
-    setSelectedTemplate(null);
-    setTagValues({});
-    setNewContractData({ client_name: '', type: '', event_date: '', value: 0 });
-    setViewMode('list');
-    fetchContracts();
+      if (error) throw error;
+
+      setSelectedTemplate(null);
+      setTagValues({});
+      setNewContractData({ client_name: '', type: '', event_date: '', value: 0 });
+      setViewMode('list');
+      fetchContracts();
+    } catch (error: any) {
+      console.error('Error creating contract:', error);
+      alert('Erro ao criar contrato: ' + (error.message || 'Erro desconhecido'));
+    }
   };
 
   const updateContractStatus = async (id: string, status: string) => {
@@ -681,17 +714,24 @@ const ContractsView: React.FC = () => {
     printContract();
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatCurrency = (value: any) => {
+    const amount = typeof value === 'number' ? value : parseFloat(String(value || 0).replace(',', '.'));
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(isNaN(amount) ? 0 : amount);
   };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '-';
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch (e) {
+      return '-';
+    }
   };
 
   const getStatusBadge = (status: string) => {
+    const s = (status || 'draft').toLowerCase();
     const styles: Record<string, string> = {
       draft: 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-400',
       pending: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
@@ -703,9 +743,9 @@ const ContractsView: React.FC = () => {
       signed: 'ASSINADO',
     };
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${styles[status] || styles.draft}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${status === 'signed' ? 'bg-emerald-500' : status === 'pending' ? 'bg-indigo-500' : 'bg-slate-400'}`}></span>
-        {labels[status] || status.toUpperCase()}
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${styles[s] || styles.draft}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${s === 'signed' ? 'bg-emerald-500' : s === 'pending' ? 'bg-indigo-500' : 'bg-slate-400'}`}></span>
+        {labels[s] || s.toUpperCase()}
       </span>
     );
   };
@@ -810,8 +850,7 @@ const ContractsView: React.FC = () => {
     );
   }
 
-  // State for mobile tags panel
-  const [showMobileTags, setShowMobileTags] = React.useState(false);
+
 
   // Template Editor View
   if (viewMode === 'edit-template') {
