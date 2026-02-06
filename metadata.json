@@ -1,0 +1,8 @@
+
+{
+  "name": "Facilita Teoo",
+  "description": "Uma plataforma completa para gestão de eventos, incluindo controle de leads, equipamentos, contratos e financeiro em um só lugar.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
