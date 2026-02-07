@@ -16,6 +16,7 @@ interface UserProfile {
   email?: string;
   full_name?: string;
   role: UserRole;
+  [key: string]: any;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen, onClose }) => {
@@ -37,7 +38,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen, onC
         .single();
 
       if (data) {
-        setUserProfile(data);
+        setUserProfile({ ...data, email: user.email || data.email });
+      } else {
+        setUserProfile({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name,
+          role: (user.user_metadata?.role as UserRole) || 'USER'
+        });
       }
     }
     setLoading(false);
@@ -143,6 +151,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen, onC
 
         {/* Bottom Action */}
         <div className="flex flex-col gap-4">
+          {['admin@facilitatoo.com', 'adminmaster@admin.com'].includes(userProfile?.email || '') && (
+            <button
+              onClick={() => {
+                onViewChange('admin');
+                onClose();
+              }}
+              className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-[1.02] transition-all"
+            >
+              <span className="material-symbols-outlined">admin_panel_settings</span>
+              <span className="text-sm">Acessar Painel</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowEventModal(true)}
             className="w-full bg-primary text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-primary/30 hover:bg-primary-hover transition-all active:scale-95 group"
