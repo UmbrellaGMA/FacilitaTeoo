@@ -45,6 +45,7 @@ interface ContractTemplate {
   logo_url?: string;
   watermark_url?: string;
   watermark_opacity?: number;
+  color?: string;
 }
 
 interface Contract {
@@ -63,6 +64,10 @@ interface Contract {
   lead_id?: string;
   signature_data?: string;
   signed_at?: string;
+  color?: string;
+  tag_values?: Record<string, string>;
+  selected_equipment?: string[];
+  custom_equipment_text?: string;
 }
 
 interface CustomTag {
@@ -89,6 +94,7 @@ const ContractsView: React.FC = () => {
   const [templateContent, setTemplateContent] = useState('');
   const [templateLogoUrl, setTemplateLogoUrl] = useState('');
   const [templateWatermarkUrl, setTemplateWatermarkUrl] = useState('');
+  const [templateColor, setTemplateColor] = useState('#a413ec');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingWatermark, setUploadingWatermark] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -109,6 +115,7 @@ const ContractsView: React.FC = () => {
     event_date: '',
     value: 0,
   });
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
 
   // View Contract State
   const [viewingContract, setViewingContract] = useState<Contract | null>(null);
@@ -341,6 +348,36 @@ const ContractsView: React.FC = () => {
     }
   };
 
+  const applyFormat = (format: string) => {
+    if (!editorRef.current) return;
+    const start = editorRef.current.selectionStart;
+    const end = editorRef.current.selectionEnd;
+    const selectedText = templateContent.substring(start, end);
+    let newText = '';
+
+    switch (format) {
+      case 'bold': newText = `<b>${selectedText}</b>`; break;
+      case 'italic': newText = `<i>${selectedText}</i>`; break;
+      case 'underline': newText = `<u>${selectedText}</u>`; break;
+      case 'list-bullet': newText = `<ul>\n<li>${selectedText}</li>\n</ul>`; break;
+      case 'list-number': newText = `<ol>\n<li>${selectedText}</li>\n</ol>`; break;
+      case 'align-left': newText = `<div style="text-align: left">${selectedText}</div>`; break;
+      case 'align-center': newText = `<div style="text-align: center">${selectedText}</div>`; break;
+      case 'align-right': newText = `<div style="text-align: right">${selectedText}</div>`; break;
+    }
+
+    const newContent = templateContent.substring(0, start) + newText + templateContent.substring(end);
+    setTemplateContent(newContent);
+
+    setTimeout(() => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        const newCursorPos = start + newText.length;
+        editorRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
   const saveTemplate = async () => {
     if (!templateName.trim() || !templateContent.trim()) return;
 
@@ -356,6 +393,7 @@ const ContractsView: React.FC = () => {
             content: templateContent,
             logo_url: templateLogoUrl || null,
             watermark_url: templateWatermarkUrl || null,
+            color: templateColor,
             updated_at: new Date().toISOString()
           })
           .eq('id', editingTemplateId);
@@ -369,6 +407,7 @@ const ContractsView: React.FC = () => {
             content: templateContent,
             logo_url: templateLogoUrl || null,
             watermark_url: templateWatermarkUrl || null,
+            color: templateColor,
             user_id: user.id
           });
 
@@ -378,6 +417,7 @@ const ContractsView: React.FC = () => {
       setTemplateName('');
       setTemplateContent('');
       setTemplateLogoUrl('');
+      setTemplateColor('#a413ec');
       setTemplateWatermarkUrl('');
       setEditingTemplateId(null);
       setViewMode('templates');
@@ -454,8 +494,34 @@ const ContractsView: React.FC = () => {
     setTemplateContent(template.content);
     setTemplateLogoUrl(template.logo_url || '');
     setTemplateWatermarkUrl(template.watermark_url || '');
+    setTemplateColor(template.color || '#a413ec');
     setEditingTemplateId(template.id);
     setViewMode('edit-template');
+  };
+
+  const editContract = (contract: Contract) => {
+    const template = templates.find(t => t.id === contract.template_id);
+    if (!template) {
+      alert('Modelo original não encontrado. Não é possível editar.');
+      return;
+    }
+
+    setSelectedTemplate(template);
+    setTagValues(contract.tag_values || {});
+    setSelectedEquipment(contract.selected_equipment || []);
+    setCustomEquipmentText(contract.custom_equipment_text || '');
+
+    // Set form data
+    setNewContractData({
+      client_name: contract.client_name,
+      type: contract.type,
+      event_date: contract.event_date ? new Date(contract.event_date).toISOString().split('T')[0] : '',
+      value: contract.value
+    });
+
+    if (contract.lead_id) setSelectedLeadId(contract.lead_id);
+    setEditingContractId(contract.id);
+    setViewMode('fill-contract');
   };
 
   // Contract Functions
@@ -471,8 +537,11 @@ const ContractsView: React.FC = () => {
     const initialValues: Record<string, string> = {};
     tags.forEach(tag => { initialValues[tag] = ''; });
     setTagValues(initialValues);
+    setTagValues(initialValues);
     setSelectedEquipment([]);
     setCustomEquipmentText('');
+    setEditingContractId(null);
+    setNewContractData({ client_name: '', type: '', event_date: '', value: 0 });
     setViewMode('fill-contract');
   };
 
@@ -550,7 +619,7 @@ const ContractsView: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado. Por favor, faça login novamente.');
 
-      const { error } = await supabase.from('contracts').insert({
+      const contractData = {
         client_name: newContractData.client_name || 'Cliente sem nome',
         client_initials: clientInitials,
         type: eventType,
@@ -562,13 +631,29 @@ const ContractsView: React.FC = () => {
         share_token: shareToken,
         lead_id: selectedLeadId || null,
         user_id: user.id,
-      });
+        color: selectedTemplate.color || '#a413ec',
+        tag_values: tagValues,
+        selected_equipment: selectedEquipment,
+        custom_equipment_text: customEquipmentText
+      };
 
-      if (error) throw error;
+      if (editingContractId) {
+        const { error } = await supabase
+          .from('contracts')
+          .update(contractData)
+          .eq('id', editingContractId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('contracts').insert(contractData);
+        if (error) throw error;
+      }
+
+
 
       setSelectedTemplate(null);
       setTagValues({});
       setNewContractData({ client_name: '', type: '', event_date: '', value: 0 });
+      setEditingContractId(null);
       setViewMode('list');
       fetchContracts();
     } catch (error: any) {
@@ -629,6 +714,7 @@ const ContractsView: React.FC = () => {
 
     const logoUrl = template?.logo_url || viewingContract?.logo_url || '';
     const watermarkUrl = template?.watermark_url || viewingContract?.watermark_url || '';
+    const primaryColor = viewingContract?.color || template?.color || '#a413ec';
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -666,10 +752,10 @@ const ContractsView: React.FC = () => {
               text-align: center;
               margin-bottom: 30px;
               padding-bottom: 20px;
-              border-bottom: 2px solid #a413ec;
+              border-bottom: 2px solid ${primaryColor};
             }
             .header h1 {
-              color: #a413ec;
+              color: ${primaryColor};
               margin: 0;
             }
             .content {
@@ -841,9 +927,10 @@ const ContractsView: React.FC = () => {
             {getStatusBadge(viewingContract.status)}
           </div>
           <div ref={printRef} className="p-8 bg-white dark:bg-[#1a141f]">
-            <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-[#161118] dark:text-white leading-relaxed">
-              {viewingContract.filled_content || 'Conteúdo não disponível.'}
-            </div>
+            <div
+              className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-[#161118] dark:text-white leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: viewingContract.filled_content || 'Conteúdo não disponível.' }}
+            />
           </div>
         </div>
       </div>
@@ -859,7 +946,7 @@ const ContractsView: React.FC = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 md:mb-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setViewMode('templates'); setEditingTemplateId(null); setTemplateName(''); setTemplateContent(''); }} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors flex-shrink-0">
+            <button onClick={() => { setViewMode('templates'); setEditingTemplateId(null); setTemplateName(''); setTemplateContent(''); setTemplateColor('#a413ec'); }} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors flex-shrink-0">
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <div className="flex items-center gap-2 text-primary min-w-0">
@@ -979,14 +1066,51 @@ const ContractsView: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase tracking-widest text-[#7c6189] mb-2 block">
+                    Cor do Tema
+                  </label>
+                  <div className="flex items-center gap-3 p-3 bg-[#f3f0f4] dark:bg-white/5 rounded-xl cursor-pointer" onClick={() => document.getElementById('color-picker')?.click()}>
+                    <div
+                      className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                      style={{ backgroundColor: templateColor }}
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-[#161118] dark:text-white">Cor Principal</p>
+                      <p className="text-xs text-[#7c6189]">{templateColor}</p>
+                    </div>
+                    <input
+                      id="color-picker"
+                      type="color"
+                      value={templateColor}
+                      onChange={(e) => setTemplateColor(e.target.value)}
+                      className="opacity-0 w-0 h-0 absolute"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Toolbar */}
             <div className="px-4 md:px-6 py-2 md:py-3 border-b border-[#e2dbe6] dark:border-[#31253a] flex gap-1 overflow-x-auto">
-              {['format_bold', 'format_italic', 'format_underlined', 'format_list_bulleted', 'format_list_numbered', 'format_align_left', 'format_align_center', 'format_align_right'].map((icon) => (
-                <button key={icon} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors text-slate-500">
-                  <span className="material-symbols-outlined text-xl">{icon}</span>
+              {[
+                { icon: 'format_bold', action: 'bold' },
+                { icon: 'format_italic', action: 'italic' },
+                { icon: 'format_underlined', action: 'underline' }, // Note: Browser execCommand or manual wrap
+                { icon: 'format_list_bulleted', action: 'list-bullet' },
+                { icon: 'format_list_numbered', action: 'list-number' },
+                { icon: 'format_align_left', action: 'align-left' },
+                { icon: 'format_align_center', action: 'align-center' },
+                { icon: 'format_align_right', action: 'align-right' }
+              ].map((item) => (
+                <button
+                  key={item.icon}
+                  onClick={() => applyFormat(item.action)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors text-slate-500 hover:text-primary"
+                  title={item.action}
+                >
+                  <span className="material-symbols-outlined text-xl">{item.icon}</span>
                 </button>
               ))}
             </div>
@@ -1414,17 +1538,17 @@ const ContractsView: React.FC = () => {
       <div className="space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <button onClick={() => setViewMode('new-contract')} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors">
+            <button onClick={() => setViewMode(editingContractId ? 'list' : 'new-contract')} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors">
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <div>
-              <h1 className="text-4xl font-black text-[#161118] dark:text-white tracking-tight">Preencher Contrato</h1>
+              <h1 className="text-4xl font-black text-[#161118] dark:text-white tracking-tight">{editingContractId ? 'Editar Contrato' : 'Preencher Contrato'}</h1>
               <p className="text-[#7c6189] dark:text-purple-200/70 text-lg mt-1">Modelo: {selectedTemplate.name}</p>
             </div>
           </div>
           <button onClick={createContract} className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-bold shadow-xl shadow-primary/25 hover:bg-primary-hover transition-all">
             <span className="material-symbols-outlined text-xl">check</span>
-            Criar Contrato
+            {editingContractId ? 'Salvar Alterações' : 'Criar Contrato'}
           </button>
         </div>
 
@@ -1651,9 +1775,10 @@ const ContractsView: React.FC = () => {
               <span className="material-symbols-outlined text-primary">preview</span>
               Pré-visualização
             </h3>
-            <div className="bg-[#f3f0f4] dark:bg-white/5 rounded-xl p-6 text-sm leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-y-auto">
-              {generateFilledContent()}
-            </div>
+            <div
+              className="bg-[#f3f0f4] dark:bg-white/5 rounded-xl p-6 text-sm leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-y-auto"
+              dangerouslySetInnerHTML={{ __html: generateFilledContent() }}
+            />
           </div>
         </div>
       </div>
@@ -1739,6 +1864,9 @@ const ContractsView: React.FC = () => {
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => viewContract(contract)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-[#7c6189] hover:text-primary transition-all" title="Visualizar">
                             <span className="material-symbols-outlined text-xl">visibility</span>
+                          </button>
+                          <button onClick={() => editContract(contract)} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl text-[#7c6189] hover:text-blue-600 transition-all" title="Editar">
+                            <span className="material-symbols-outlined text-xl">edit</span>
                           </button>
                           {contract.status === 'draft' && (
                             <button onClick={() => updateContractStatus(contract.id, 'pending')} className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-xl text-[#7c6189] hover:text-indigo-600 transition-all" title="Enviar para assinatura">
