@@ -612,7 +612,23 @@ const ContractsView: React.FC = () => {
 
       // Extract values from tags if direct fields are empty
       const eventType = newContractData.type || tagValues['[Tipo de Evento]'] || 'Contrato';
-      const eventDate = newContractData.event_date || tagValues['[Data do Evento]'] || '';
+      let eventDate = newContractData.event_date || tagValues['[Data do Evento]'] || '';
+
+      // Parse DD/MM/YYYY to YYYY-MM-DD if needed
+      if (eventDate && eventDate.includes('/')) {
+        const parts = eventDate.split('/');
+        if (parts.length === 3) {
+          // Assuming DD/MM/YYYY
+          const day = parts[0];
+          const month = parts[1];
+          const year = parts[2];
+          // Check if it's actually DD/MM/YYYY (year is last)
+          if (year.length === 4) {
+            eventDate = `${year}-${month}-${day}`;
+          }
+        }
+      }
+
       const contractValue = newContractData.value || parseFloat(tagValues['[Valor Total]']?.replace(/[^\d,]/g, '').replace(',', '.') || '0') || 0;
 
       // Get current user
