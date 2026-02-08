@@ -105,6 +105,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
         body: JSON.stringify({
           plan: plan,
           userEmail: currentSession.user.email,
+          userId: currentSession.user.id,
           origin: window.location.origin
         }),
       });

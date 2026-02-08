@@ -17,7 +17,7 @@ serve(async (req) => {
     }
 
     try {
-        let { plan, userEmail, origin } = await req.json();
+        let { plan, userEmail, userId, origin } = await req.json();
 
         // Ensure origin is defined and valid
         if (!origin) {
@@ -54,8 +54,18 @@ serve(async (req) => {
                 failure: `${origin}/settings?payment=failure`,
                 pending: `${origin}/settings?payment=pending`,
             },
-            // auto_return: 'approved', // Removed temporarily to fix validation error with some URLs
-            external_reference: plan.id, // Store plan ID here to retrieve later correctly
+
+            // notification_url: 'https://atluigqzaymbkgfyxgks.supabase.co/functions/v1/mp-webhook', // This would be the production webhook URL
+            // Using auto_return 'approved' causes validation issues on localhost sometimes, so we rely on the user returning.
+            // But to track payment status, we need metadata.
+
+            metadata: {
+                user_id: userId,
+                plan_id: plan.id,
+                duration_days: 30 // Assuming monthly for now, or get from plan.interval
+            },
+
+            external_reference: plan.id,
         };
 
         const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
