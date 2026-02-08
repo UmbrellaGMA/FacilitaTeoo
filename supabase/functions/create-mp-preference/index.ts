@@ -17,7 +17,17 @@ serve(async (req) => {
     }
 
     try {
-        const { plan, userEmail, origin } = await req.json();
+        let { plan, userEmail, origin } = await req.json();
+
+        // Ensure origin is defined and valid
+        if (!origin) {
+            origin = req.headers.get('origin') || 'http://localhost:5173';
+        }
+
+        // Remove trailing slash if present to avoid double slashes
+        if (origin.endsWith('/')) {
+            origin = origin.slice(0, -1);
+        }
 
         // Validate input
         if (!plan || !plan.price || !userEmail) {
@@ -44,7 +54,7 @@ serve(async (req) => {
                 failure: `${origin}/settings?payment=failure`,
                 pending: `${origin}/settings?payment=pending`,
             },
-            auto_return: 'approved',
+            // auto_return: 'approved', // Removed temporarily to fix validation error with some URLs
             external_reference: plan.id, // Store plan ID here to retrieve later correctly
         };
 
@@ -61,7 +71,7 @@ serve(async (req) => {
 
         if (!mpResponse.ok) {
             console.error('Mercado Pago Error:', mpData);
-            throw new Error(mpData.message || 'Erro ao criar preferência no Mercado Pago');
+            throw new Error(`MP Error ${mpData.message} | Sent Back URLs: ${JSON.stringify(preferenceData.back_urls)}`);
         }
 
         console.log('Preference created successfully:', mpData.id);
@@ -73,7 +83,11 @@ serve(async (req) => {
 
     } catch (error: any) {
         console.error('Edge Function Error:', error.message);
-        return new Response(JSON.stringify({ error: error.message }), {
+        // Include preferenceData in the error response if it exists (we need to move the declaration up or assume it might be undefined)
+        return new Response(JSON.stringify({
+            error: error.message,
+            debug_origin: req.headers.get('origin'), // Log header origin
+        }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 400,
         });

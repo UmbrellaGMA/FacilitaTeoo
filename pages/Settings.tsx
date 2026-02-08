@@ -110,13 +110,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
       });
 
       const data = await response.json();
+      console.log('MP Response:', data); // Debug log
 
-      if (data.init_point) {
+      if (response.ok && data.init_point) {
         window.location.href = data.init_point;
       } else {
-        throw new Error('Erro ao gerar link de pagamento');
+        throw new Error(data.error || 'Erro ao gerar link de pagamento. Verifique o console.');
       }
     } catch (error: any) {
+      console.error('Payment Error:', error);
       setMessage({ type: 'error', text: error.message || 'Erro ao processar assinatura' });
     }
   };
