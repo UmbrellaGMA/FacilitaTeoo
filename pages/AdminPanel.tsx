@@ -19,6 +19,8 @@ interface AdminUserData {
     id: string;
     email: string;
     full_name: string | null;
+    phone: string | null;
+    cpf: string | null;
     role: string;
     status: string;
     is_deletable: boolean;
@@ -52,6 +54,12 @@ const AdminPanel: React.FC = () => {
     const [editingUser, setEditingUser] = useState<AdminUserData | null>(null);
     const [showEditUserModal, setShowEditUserModal] = useState(false);
     const [editFormData, setEditFormData] = useState({ email: '', password: '' });
+
+
+
+    // Activation Modal State
+    const [showActivationModal, setShowActivationModal] = useState(false);
+    const [activationData, setActivationData] = useState({ userId: '', planId: '', durationDays: 30 });
 
     useEffect(() => {
         fetchCurrentUser();
@@ -169,10 +177,9 @@ const AdminPanel: React.FC = () => {
     };
 
     const toggleSubscription = async (user: AdminUserData) => {
-        // Simple logic: if has active sub, cancel it. If not, add to 'Free' or default plan (if exists)
-        // ideally we would show a modal to pick a plan, but for now let's just deactivate if active
+        if (user.subscription_status === 'active' || user.subscription_status === 'trialing') {
+            if (!confirm(`Deseja cancelar a assinatura ${user.subscription_status === 'trialing' ? 'de avaliação ' : ''}deste usuário?`)) return;
 
-        if (user.subscription_status === 'active') {
             const { error } = await supabase
                 .from('user_subscriptions')
                 .update({ status: 'canceled' })
@@ -184,42 +191,66 @@ const AdminPanel: React.FC = () => {
                 fetchData();
             }
         } else {
-            // Activate Logic (Assign to first plan for now as an example)
+            // Open Activation Modal
             if (plans.length === 0) {
-                showMessage('error', 'Nenhum plano disponível para atribuir');
+                showMessage('error', 'Crie um plano antes de ativar assinaturas manualmente.');
                 return;
             }
+            setActivationData({
+                userId: user.id,
+                planId: plans[0].id,
+                durationDays: 30
+            });
+            setShowActivationModal(true);
+        }
+    };
 
+    const activateSubscription = async () => {
+        if (!activationData.userId || !activationData.planId) return;
+
+        setSaving(true);
+        try {
             // Check if subscription record exists
             const { data: existingSub } = await supabase
                 .from('user_subscriptions')
                 .select('id')
-                .eq('user_id', user.id)
+                .eq('user_id', activationData.userId)
                 .single();
+
+            const startDate = new Date();
+            const endDate = new Date();
+            endDate.setDate(startDate.getDate() + parseInt(activationData.durationDays.toString()));
 
             let error;
             if (existingSub) {
                 const res = await supabase.from('user_subscriptions').update({
                     status: 'active',
-                    plan_id: plans[0].id
-                }).eq('user_id', user.id);
+                    plan_id: activationData.planId,
+                    current_period_start: startDate.toISOString(),
+                    current_period_end: endDate.toISOString()
+                }).eq('user_id', activationData.userId);
                 error = res.error;
             } else {
                 const res = await supabase.from('user_subscriptions').insert({
-                    user_id: user.id,
-                    plan_id: plans[0].id,
+                    user_id: activationData.userId,
+                    plan_id: activationData.planId,
                     status: 'active',
-                    current_period_start: new Date().toISOString(),
-                    current_period_end: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString()
+                    current_period_start: startDate.toISOString(),
+                    current_period_end: endDate.toISOString()
                 });
                 error = res.error;
             }
 
-            if (error) showMessage('error', 'Erro ao ativar assinatura');
-            else {
-                showMessage('success', 'Assinatura ativada (Plano Padrão)');
-                fetchData();
-            }
+            if (error) throw error;
+
+            showMessage('success', 'Assinatura ativada com sucesso');
+            setShowActivationModal(false);
+            fetchData();
+        } catch (error: any) {
+            console.error(error);
+            showMessage('error', 'Erro ao ativar assinatura: ' + error.message);
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -312,10 +343,8 @@ const AdminPanel: React.FC = () => {
 
     const tabs = [
         { id: 'users', label: 'Gestão de Usuários', icon: 'group' },
-        ...(currentUserEmail !== 'adminmaster@admin.com' ? [
-            { id: 'settings', label: 'Configurações', icon: 'settings' },
-            { id: 'plans', label: 'Planos', icon: 'loyalty' },
-        ] : [])
+        { id: 'settings', label: 'Configurações', icon: 'settings' },
+        { id: 'plans', label: 'Planos', icon: 'loyalty' },
     ];
 
     // Filter and Pagination Logic
@@ -483,13 +512,17 @@ const AdminPanel: React.FC = () => {
                                                         <button
                                                             onClick={() => toggleSubscription(user)}
                                                             className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${user.subscription_status === 'active'
-                                                                    ? 'bg-emerald-100 text-emerald-700 hover:bg-red-100 hover:text-red-700'
+                                                                ? 'bg-emerald-100 text-emerald-700 hover:bg-red-100 hover:text-red-700'
+                                                                : user.subscription_status === 'trialing'
+                                                                    ? 'bg-amber-100 text-amber-700 hover:bg-red-100 hover:text-red-700'
                                                                     : 'bg-slate-100 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700'
                                                                 }`}
                                                         >
                                                             {user.subscription_status === 'active'
                                                                 ? (user.plan_name || 'Ativo')
-                                                                : 'Inativo'
+                                                                : user.subscription_status === 'trialing'
+                                                                    ? 'Período de Avaliação'
+                                                                    : 'Ativar Manualmente'
                                                             }
                                                         </button>
                                                     </td>
@@ -833,6 +866,54 @@ const AdminPanel: React.FC = () => {
                                     {saving ? 'Salvando...' : 'Salvar'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Activation Modal */}
+            {showActivationModal && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowActivationModal(false)} />
+                    <div className="relative bg-white dark:bg-[#1a141f] rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 fade-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-bold text-lg text-[#161118] dark:text-white">Ativar Assinatura Manualmente</h3>
+                            <button onClick={() => setShowActivationModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-black uppercase tracking-widest text-[#7c6189] mb-2 block">Plano</label>
+                                <select
+                                    value={activationData.planId}
+                                    onChange={(e) => setActivationData({ ...activationData, planId: e.target.value })}
+                                    className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-[#161118] dark:text-white"
+                                >
+                                    {plans.map(plan => (
+                                        <option key={plan.id} value={plan.id} className="text-black">{plan.name} - R$ {plan.price}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-black uppercase tracking-widest text-[#7c6189] mb-2 block">Duração (Dias)</label>
+                                <input
+                                    type="number"
+                                    value={activationData.durationDays}
+                                    onChange={(e) => setActivationData({ ...activationData, durationDays: parseInt(e.target.value) || 0 })}
+                                    className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-[#161118] dark:text-white"
+                                    min="1"
+                                />
+                            </div>
+
+                            <button
+                                onClick={activateSubscription}
+                                disabled={saving}
+                                className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-colors mt-4 shadow-lg shadow-emerald-500/25"
+                            >
+                                {saving ? 'Ativando...' : 'Confirmar Ativação'}
+                            </button>
                         </div>
                     </div>
                 </div>

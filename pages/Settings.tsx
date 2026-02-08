@@ -26,6 +26,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
   const [eventsCount, setEventsCount] = useState(0);
   const [userRole, setUserRole] = useState<string | null>(null);
 
+  // Subscription states
+  const [subscription, setSubscription] = useState<any>(null);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
+
   // Load user data from session
   useEffect(() => {
     if (session?.user) {
@@ -38,8 +43,83 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
       fetchEventsCount();
       // Fetch user role
       fetchUserRole();
+      // Fetch subscription data
+      fetchSubscriptionData();
     }
   }, [session]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    if (paymentStatus === 'success') {
+      setMessage({ type: 'success', text: 'Pagamento realizado com sucesso! Sua assinatura será ativada em breve.' });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentStatus === 'failure') {
+      setMessage({ type: 'error', text: 'Pagamento falhou. Tente novamente.' });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  const fetchSubscriptionData = async () => {
+    try {
+      setLoadingSubscription(true);
+
+      // Fetch user subscription
+      const { data: sub } = await supabase
+        .from('user_subscriptions')
+        .select('*, plan:subscription_plans(*)')
+        .eq('user_id', session?.user?.id)
+        .single();
+
+      if (sub) setSubscription(sub);
+
+      // Fetch active plans
+      const { data: plansData } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .eq('is_active', true)
+        .order('price');
+
+      if (plansData) setPlans(plansData);
+
+    } catch (error) {
+      console.error('Error fetching subscription:', error);
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
+
+  const handleSubscribe = async (plan: any) => {
+    try {
+      setMessage({ type: 'success', text: 'Processando pagamento...' });
+
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) return;
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-mp-preference`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${currentSession.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          plan: plan,
+          userEmail: currentSession.user.email,
+          origin: window.location.origin
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.init_point) {
+        window.location.href = data.init_point;
+      } else {
+        throw new Error('Erro ao gerar link de pagamento');
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message || 'Erro ao processar assinatura' });
+    }
+  };
 
   const fetchUserRole = async () => {
     try {
@@ -81,15 +161,29 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
     setMessage(null);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      // 1. Update Auth Metadata
+      const { error: authError } = await supabase.auth.updateUser({
         data: {
           full_name: fullName,
           phone: phone,
           cpf: cpf,
         }
       });
+      if (authError) throw authError;
 
-      if (error) throw error;
+      // 2. Update Public Profile Table
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .update({
+          full_name: fullName,
+          phone: phone,
+          cpf: cpf,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', session?.user?.id);
+
+      if (profileError) throw profileError;
+
       setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Erro ao atualizar perfil' });
@@ -281,6 +375,82 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
             </div>
           </section>
 
+
+
+          {/* Subscription Section */}
+          <section className="bg-white dark:bg-white/5 rounded-3xl border border-[#e2dbe6] dark:border-white/10 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-[#e2dbe6] dark:border-white/10 bg-slate-50/50 dark:bg-transparent">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">Assinatura</h3>
+              <p className="text-sm text-[#7c6189]">Gerencie seu plano e cobrança.</p>
+            </div>
+            <div className="p-8 space-y-6">
+              {/* Current Plan Status */}
+              <div className="bg-slate-50 dark:bg-white/5 rounded-2xl p-6 border border-[#e2dbe6] dark:border-white/10">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-[#7c6189] mb-1">Status Atual</p>
+                    <div className="flex items-center gap-3">
+                      {subscription?.status === 'active' || subscription?.status === 'trialing' ? (
+                        <span className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-100 dark:bg-emerald-500/10 px-3 py-1 rounded-full text-sm">
+                          <span className="material-symbols-outlined text-lg">check_circle</span>
+                          {subscription.status === 'trialing' ? 'Período de Teste' : 'Ativo'}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold bg-red-100 dark:bg-red-500/10 px-3 py-1 rounded-full text-sm">
+                          <span className="material-symbols-outlined text-lg">error</span>
+                          Inativo
+                        </span>
+                      )}
+                      {subscription?.plan?.name && (
+                        <span className="text-slate-900 dark:text-white font-bold text-lg">
+                          Plano {subscription.plan.name}
+                        </span>
+                      )}
+                    </div>
+                    {subscription?.current_period_end && (
+                      <p className="text-sm text-[#7c6189] mt-2">
+                        {subscription.status === 'trialing' ? 'Teste expira em: ' : 'Renova em: '}
+                        <span className="font-bold">
+                          {new Date(subscription.current_period_end).toLocaleDateString()}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Available Plans */}
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white mb-4">Planos Disponíveis</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {plans.map((plan) => (
+                    <div key={plan.id} className="border border-[#e2dbe6] dark:border-white/10 rounded-2xl p-6 flex flex-col hover:border-primary transition-colors cursor-pointer" onClick={() => handleSubscribe(plan)}>
+                      <div className="flex justify-between items-start mb-2">
+                        <h5 className="font-bold text-lg text-slate-900 dark:text-white">{plan.name}</h5>
+                        {subscription?.plan_id === plan.id && (
+                          <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded-full">Atual</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-[#7c6189] mb-4 flex-1">{plan.description}</p>
+                      <div className="mt-auto flex items-center justify-between">
+                        <div className="flex items-baseline">
+                          <span className="text-2xl font-black text-slate-900 dark:text-white">R$ {plan.price}</span>
+                          <span className="text-sm text-[#7c6189]">/{plan.interval === 'monthly' ? 'mês' : plan.interval}</span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSubscribe(plan); }}
+                          className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-primary-hover transition-colors"
+                        >
+                          Assinar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="bg-white dark:bg-white/5 rounded-3xl border border-[#e2dbe6] dark:border-white/10 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-[#e2dbe6] dark:border-white/10 bg-slate-50/50 dark:bg-transparent">
               <h3 className="text-lg font-black text-slate-900 dark:text-white">Segurança</h3>
@@ -334,7 +504,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
           </section>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
