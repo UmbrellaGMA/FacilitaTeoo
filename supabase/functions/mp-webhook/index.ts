@@ -7,7 +7,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 
 serve(async (req) => {
     try {
-        const url = new URL(req.url);
+        const url = new URL(req.url); // Keep for parsing if needed
 
         // Only allow POST
         if (req.method !== "POST") {
@@ -67,9 +67,8 @@ serve(async (req) => {
                         const { error: updateError } = await supabase.from("user_subscriptions").update({
                             status: "active",
                             plan_id: planId,
-                            current_period_start: startDate.toISOString(),
-                            current_period_end: endDate.toISOString(),
-                            updated_at: new Date().toISOString()
+                            starts_at: startDate.toISOString(),
+                            expires_at: endDate.toISOString()
                         }).eq("user_id", userId);
                         error = updateError;
                     } else {
@@ -77,8 +76,8 @@ serve(async (req) => {
                             user_id: userId,
                             plan_id: planId,
                             status: "active",
-                            current_period_start: startDate.toISOString(),
-                            current_period_end: endDate.toISOString()
+                            starts_at: startDate.toISOString(),
+                            expires_at: endDate.toISOString()
                         });
                         error = insertError;
                     }
