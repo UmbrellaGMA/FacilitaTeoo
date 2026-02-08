@@ -20,21 +20,83 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [isMaster, setIsMaster] = useState(false);
+  const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(null);
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false);
+      if (session) {
+        checkSubscription(session.user.id);
+      } else {
+        setLoading(false);
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) {
+        checkSubscription(session.user.id);
+      } else {
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkSubscription = async (userId: string) => {
+    try {
+      // 1. Check User Role
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      const master = profile?.role === 'MASTER';
+      setIsMaster(master);
+
+      // 2. Check Subscription
+      const { data: sub } = await supabase
+        .from('user_subscriptions')
+        .select('status, expires_at')
+        .eq('user_id', userId)
+        .single();
+
+      if (sub) {
+        setSubscriptionStatus(sub.status);
+        setSubscriptionExpiry(sub.expires_at);
+      } else if (!master) {
+        // No subscription found for non-master user
+        setSubscriptionStatus('inactive');
+      } else {
+        setSubscriptionStatus('active'); // Masters always active
+      }
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isAccessBlocked = () => {
+    if (isMaster) return false;
+
+    // Statuses that are considered "good"
+    if (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') {
+      // Check if actually expired but status not updated (safety check)
+      if (subscriptionExpiry && new Date(subscriptionExpiry) < new Date()) {
+        return true;
+      }
+      return false;
+    }
+
+    return true; // Block anything else (inactive, suspended, expired, canceled)
+  };
 
   const renderContent = () => {
     switch (activeView) {
@@ -88,6 +150,43 @@ const App: React.FC = () => {
           {renderContent()}
         </main>
       </div>
+
+      {/* Payment Blocking Blocking Overlay */}
+      {isAccessBlocked() && activeView !== 'settings' && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 md:p-12 max-w-lg w-full text-center border border-white/20 shadow-2xl animate-in zoom-in-95 duration-500">
+            <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-8 border border-red-500/20">
+              <span className="material-symbols-outlined text-red-500 text-5xl">lock_open</span>
+            </div>
+
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">Acesso Suspenso</h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-8 text-lg leading-relaxed">
+              Sua assinatura expirou ou está suspensa. Para continuar utilizando todos os recursos do <strong>Facilita Teoo</strong>, por favor regularize o pagamento.
+            </p>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => setActiveView('settings')}
+                className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/30 hover:bg-primary-hover hover:-translate-y-0.5 transition-all text-lg"
+              >
+                Pagar Pendências
+              </button>
+
+              <button
+                onClick={() => supabase.auth.signOut()}
+                className="w-full bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white font-bold py-4 rounded-2xl hover:bg-slate-200 dark:hover:bg-white/10 transition-all text-sm"
+              >
+                Sair da Conta
+              </button>
+            </div>
+
+            <p className="mt-8 text-slate-400 text-xs flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-sm">support_agent</span>
+              Dúvidas? Entre em contato com nosso suporte
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

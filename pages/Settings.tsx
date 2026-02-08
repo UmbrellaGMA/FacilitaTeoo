@@ -73,11 +73,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
 
       if (sub) setSubscription(sub);
 
-      // Fetch active plans
+      // Fetch active plans (excluding free plans from the list)
       const { data: plansData } = await supabase
         .from('subscription_plans')
         .select('*')
         .eq('is_active', true)
+        .gt('price', 0)
         .order('price');
 
       if (plansData) setPlans(plansData);
@@ -263,7 +264,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
     }
   };
 
-  const isPlanActive = subscription?.status === 'active' || subscription?.status === 'trialing';
+  const isPlanActive = (subscription?.status === 'active' || subscription?.status === 'trialing') &&
+    (subscription?.expires_at ? new Date(subscription.expires_at) > new Date() : true);
+
+  const canSubscribe = (planId: string) => {
+    // If no subscription at all, can subscribe
+    if (!subscription) return true;
+
+    // If current plan is the same, can't subscribe (already active)
+    if (subscription.plan_id === planId && isPlanActive) return false;
+
+    // If current plan is "Plano Free" (id handled by name or checked if price is 0), allow upgrading
+    if (subscription.plan?.price == 0 || subscription.status === 'trialing') return true;
+
+    // If current plan is active and paid, disable others for now (simple logic)
+    if (isPlanActive) return false;
+
+    return true;
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
@@ -476,14 +494,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
                           <span className="text-sm text-[#7c6189]">/{plan.interval === 'monthly' ? 'mês' : plan.interval}</span>
                         </div>
                         <button
-                          onClick={(e) => { e.stopPropagation(); if (!isPlanActive) handleSubscribe(plan); }}
-                          disabled={isPlanActive}
-                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${isPlanActive
+                          onClick={(e) => { e.stopPropagation(); if (canSubscribe(plan.id)) handleSubscribe(plan); }}
+                          disabled={!canSubscribe(plan.id)}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${!canSubscribe(plan.id)
                             ? 'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                             : 'bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/20 hover:scale-[1.02]'
                             }`}
                         >
-                          {isPlanActive ? (subscription?.plan_id === plan.id ? 'Plano Ativo' : 'Indisponível') : 'Assinar'}
+                          {subscription?.plan_id === plan.id && isPlanActive ? 'Plano Ativo' : 'Assinar'}
                         </button>
                       </div>
                     </div>
