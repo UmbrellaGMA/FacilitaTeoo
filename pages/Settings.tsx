@@ -243,6 +243,28 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
 
   const userEmail = session?.user?.email || '';
 
+  // Helper to calculate time remaining
+  const getTimeRemaining = (expiryDate: string) => {
+    if (!expiryDate) return '';
+    const total = Date.parse(expiryDate) - Date.now();
+
+    if (total <= 0) return 'Expirado';
+
+    const days = Math.floor(total / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((total / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((total / 1000 / 60) % 60);
+
+    if (days > 0) {
+      return `${days}d ${hours}h restantes`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m restantes`;
+    } else {
+      return `${minutes}m restantes`;
+    }
+  };
+
+  const isPlanActive = subscription?.status === 'active' || subscription?.status === 'trialing';
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="mb-6 md:mb-8">
@@ -410,13 +432,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
                         </span>
                       )}
                     </div>
-                    {subscription?.current_period_end && (
-                      <p className="text-sm text-[#7c6189] mt-2">
-                        {subscription.status === 'trialing' ? 'Teste expira em: ' : 'Renova em: '}
-                        <span className="font-bold">
-                          {new Date(subscription.current_period_end).toLocaleDateString()}
-                        </span>
-                      </p>
+                    {subscription?.expires_at && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm text-[#7c6189]">
+                          {subscription.status === 'trialing' ? 'Teste expira em: ' : 'Renova em: '}
+                          <span className="font-bold">
+                            {new Date(subscription.expires_at).toLocaleDateString()}
+                          </span>
+                        </p>
+                        <p className="text-xs font-bold text-primary flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs">timer</span>
+                          {getTimeRemaining(subscription.expires_at)}
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -427,7 +455,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
                 <h4 className="font-bold text-slate-900 dark:text-white mb-4">Planos Disponíveis</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {plans.map((plan) => (
-                    <div key={plan.id} className="border border-[#e2dbe6] dark:border-white/10 rounded-2xl p-6 flex flex-col hover:border-primary transition-colors cursor-pointer" onClick={() => handleSubscribe(plan)}>
+                    <div
+                      key={plan.id}
+                      className={`border rounded-2xl p-6 flex flex-col transition-all ${isPlanActive
+                        ? 'border-[#e2dbe6] dark:border-white/10 opacity-75'
+                        : 'border-[#e2dbe6] dark:border-white/10 hover:border-primary cursor-pointer'
+                        }`}
+                      onClick={() => !isPlanActive && handleSubscribe(plan)}
+                    >
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-bold text-lg text-slate-900 dark:text-white">{plan.name}</h5>
                         {subscription?.plan_id === plan.id && (
@@ -441,10 +476,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
                           <span className="text-sm text-[#7c6189]">/{plan.interval === 'monthly' ? 'mês' : plan.interval}</span>
                         </div>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleSubscribe(plan); }}
-                          className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-primary-hover transition-colors"
+                          onClick={(e) => { e.stopPropagation(); if (!isPlanActive) handleSubscribe(plan); }}
+                          disabled={isPlanActive}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${isPlanActive
+                            ? 'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                            : 'bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/20 hover:scale-[1.02]'
+                            }`}
                         >
-                          Assinar
+                          {isPlanActive ? (subscription?.plan_id === plan.id ? 'Plano Ativo' : 'Indisponível') : 'Assinar'}
                         </button>
                       </div>
                     </div>

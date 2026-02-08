@@ -226,8 +226,8 @@ const AdminPanel: React.FC = () => {
                 const res = await supabase.from('user_subscriptions').update({
                     status: 'active',
                     plan_id: activationData.planId,
-                    current_period_start: startDate.toISOString(),
-                    current_period_end: endDate.toISOString()
+                    starts_at: startDate.toISOString(),
+                    expires_at: endDate.toISOString()
                 }).eq('user_id', activationData.userId);
                 error = res.error;
             } else {
@@ -235,8 +235,8 @@ const AdminPanel: React.FC = () => {
                     user_id: activationData.userId,
                     plan_id: activationData.planId,
                     status: 'active',
-                    current_period_start: startDate.toISOString(),
-                    current_period_end: endDate.toISOString()
+                    starts_at: startDate.toISOString(),
+                    expires_at: endDate.toISOString()
                 });
                 error = res.error;
             }
