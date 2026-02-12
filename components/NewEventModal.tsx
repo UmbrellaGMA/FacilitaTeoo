@@ -552,41 +552,43 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
                 )}
 
                 {/* Footer */}
-                <div className="p-6 border-t border-[#e2dbe6] dark:border-[#31253a] flex flex-col sm:flex-row justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-3 text-sm font-bold text-[#7c6189] hover:text-[#161118] transition-colors order-last sm:order-first">
-                        Cancelar
-                    </button>
+                <div className="p-4 md:p-6 border-t border-[#e2dbe6] dark:border-[#31253a]">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
+                        <button onClick={onClose} className="px-3 py-3 text-sm font-bold text-[#7c6189] hover:text-[#161118] transition-colors rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 col-span-2 sm:col-span-1 order-last sm:order-first">
+                            Cancelar
+                        </button>
 
-                    <button
-                        onClick={() => createEvent('RASCUNHO')}
-                        disabled={loading || !eventData.title || !eventData.event_date}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-                    >
-                        <span className="material-symbols-outlined text-lg">edit_note</span>
-                        Rascunho
-                    </button>
+                        <button
+                            onClick={() => createEvent('RASCUNHO')}
+                            disabled={loading || !eventData.title || !eventData.event_date}
+                            className="flex items-center justify-center gap-1.5 px-3 py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-600 dark:text-slate-300 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50"
+                        >
+                            <span className="material-symbols-outlined text-base md:text-lg">edit_note</span>
+                            Rascunho
+                        </button>
 
-                    <button
-                        onClick={() => createEvent('ORÇAMENTO')}
-                        disabled={loading || !eventData.title || !eventData.event_date}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-                    >
-                        <span className="material-symbols-outlined text-lg">request_quote</span>
-                        Orçamento
-                    </button>
+                        <button
+                            onClick={() => createEvent('ORÇAMENTO')}
+                            disabled={loading || !eventData.title || !eventData.event_date}
+                            className="flex items-center justify-center gap-1.5 px-3 py-3 bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30 text-amber-700 dark:text-amber-400 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50"
+                        >
+                            <span className="material-symbols-outlined text-base md:text-lg">request_quote</span>
+                            Orçamento
+                        </button>
 
-                    <button
-                        onClick={() => createEvent('CONFIRMADO')}
-                        disabled={loading || !eventData.title || !eventData.event_date}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-xl shadow-primary/25 hover:bg-primary-hover transition-all disabled:opacity-50"
-                    >
-                        {loading ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                            <span className="material-symbols-outlined text-lg">check_circle</span>
-                        )}
-                        Confirmar
-                    </button>
+                        <button
+                            onClick={() => createEvent('CONFIRMADO')}
+                            disabled={loading || !eventData.title || !eventData.event_date}
+                            className="flex items-center justify-center gap-1.5 px-3 py-3 bg-primary text-white rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-primary/25 hover:bg-primary-hover transition-all disabled:opacity-50"
+                        >
+                            {loading ? (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                                <span className="material-symbols-outlined text-base md:text-lg">check_circle</span>
+                            )}
+                            Confirmar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div >
