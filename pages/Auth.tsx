@@ -276,6 +276,23 @@ const Auth: React.FC = () => {
                                     ? 'Já tem uma conta? Faça login agora'
                                     : 'Novo por aqui? Crie sua conta gratuitamente')}
                         </button>
+
+                        {/* Legal Links */}
+                        <div className="mt-6 flex items-center justify-center gap-3 text-xs text-[#7c6189]/70 dark:text-purple-200/40">
+                            <a
+                                href="/privacidade"
+                                className="hover:text-primary transition-colors font-semibold underline decoration-dotted underline-offset-2"
+                            >
+                                Política de Privacidade
+                            </a>
+                            <span className="text-[#e2dbe6] dark:text-[#31253a]">•</span>
+                            <a
+                                href="/termos"
+                                className="hover:text-primary transition-colors font-semibold underline decoration-dotted underline-offset-2"
+                            >
+                                Termos de Serviço
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

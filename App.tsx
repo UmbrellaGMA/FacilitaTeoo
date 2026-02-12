@@ -11,6 +11,8 @@ import EventsView from './pages/Events';
 import SettingsView from './pages/Settings';
 import AdminPanel from './pages/AdminPanel';
 import Auth from './pages/Auth';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import { ViewType } from './types';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -119,6 +121,15 @@ const App: React.FC = () => {
         <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
       </div>
     );
+  }
+
+  // Public pages (accessible without login)
+  const pathname = window.location.pathname;
+  if (pathname === '/privacidade') {
+    return <PrivacyPolicy />;
+  }
+  if (pathname === '/termos') {
+    return <TermsOfService />;
   }
 
   if (!session) {
