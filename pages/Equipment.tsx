@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { formatCurrency, parseCurrencyToNumber } from '../lib/formatters';
+
 
 interface Equipment {
   id: string;
@@ -349,16 +351,15 @@ const EquipmentView: React.FC = () => {
                   <span className="text-[10px] font-medium text-blue-500 bg-blue-100 dark:bg-blue-500/20 px-2 py-0.5 rounded-full">[VALORPRONTO]</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
+
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.unit_price}
-                    onChange={(e) => setFormData({ ...formData, unit_price: parseFloat(e.target.value) || 0 })}
-                    placeholder="0,00"
-                    className="w-full pl-12 pr-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
+                    type="text"
+                    value={formatCurrency(formData.unit_price)}
+                    onChange={(e) => setFormData({ ...formData, unit_price: parseCurrencyToNumber(e.target.value) })}
+                    placeholder="R$ 0,00"
+                    className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
                   />
+
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">Este valor será usado ao aplicar a tag [VALORPRONTO] no contrato</p>
               </div>
@@ -367,22 +368,29 @@ const EquipmentView: React.FC = () => {
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-[#7c6189] mb-2 block">Qtd. Total</label>
                   <input
-                    type="number"
-                    min="0"
-                    value={formData.total}
-                    onChange={(e) => setFormData({ ...formData, total: parseInt(e.target.value) || 0 })}
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.total || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, total: raw ? parseInt(raw, 10) : 0 });
+                    }}
                     className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-[#7c6189] mb-2 block">Em Uso</label>
                   <input
-                    type="number"
-                    min="0"
-                    value={formData.in_use}
-                    onChange={(e) => setFormData({ ...formData, in_use: parseInt(e.target.value) || 0 })}
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.in_use || ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, in_use: raw ? parseInt(raw, 10) : 0 });
+                    }}
                     className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
                   />
+
                 </div>
               </div>
               <div>

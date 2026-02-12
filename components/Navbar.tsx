@@ -18,20 +18,58 @@ interface SearchResult {
   view: ViewType;
 }
 
+interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success' | 'update';
+  created_at: string;
+  is_read?: boolean;
+}
+
+interface HelpContactItem {
+  id: string;
+  type: 'email' | 'whatsapp' | 'phone' | 'link';
+  label: string;
+  description?: string;
+  value: string;
+  icon: string;
+}
+
+interface TutorialItem {
+  id: string;
+  title: string;
+  description?: string;
+  video_url?: string;
+  category: string;
+}
+
 const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  // Data from database
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [readNotifIds, setReadNotifIds] = useState<Set<string>>(new Set());
+  const [helpContacts, setHelpContacts] = useState<HelpContactItem[]>([]);
+  const [tutorials, setTutorials] = useState<TutorialItem[]>([]);
+  const [showTutorialsSection, setShowTutorialsSection] = useState(false);
 
   useEffect(() => {
     if (session?.user) {
       fetchUserRole();
+      fetchNotifications();
+      fetchHelpContacts();
+      fetchTutorials();
     }
   }, [session]);
 
@@ -47,6 +85,65 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
       console.error('Error fetching user role:', error);
     }
   };
+
+  const fetchNotifications = async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (data) setNotifications(data);
+
+    // Fetch read status
+    const { data: reads } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', session?.user?.id || '');
+    if (reads) {
+      setReadNotifIds(new Set(reads.map((r: any) => r.notification_id)));
+    }
+  };
+
+  const fetchHelpContacts = async () => {
+    const { data } = await supabase
+      .from('help_contacts')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (data) setHelpContacts(data);
+  };
+
+  const fetchTutorials = async () => {
+    const { data } = await supabase
+      .from('tutorials')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (data) setTutorials(data);
+  };
+
+  const markNotificationAsRead = async (notifId: string) => {
+    if (readNotifIds.has(notifId)) return;
+    await supabase.from('notification_reads').insert({
+      notification_id: notifId,
+      user_id: session?.user?.id
+    });
+    setReadNotifIds(prev => new Set([...prev, notifId]));
+  };
+
+  const markAllAsRead = async () => {
+    const unread = notifications.filter(n => !readNotifIds.has(n.id));
+    if (unread.length === 0) return;
+    const inserts = unread.map(n => ({
+      notification_id: n.id,
+      user_id: session?.user?.id
+    }));
+    await supabase.from('notification_reads').insert(inserts);
+    setReadNotifIds(new Set(notifications.map(n => n.id)));
+  };
+
+  const unreadCount = notifications.filter(n => !readNotifIds.has(n.id)).length;
 
   const viewLabels: Record<ViewType, string> = {
     dashboard: 'Painel Principal',
@@ -80,6 +177,9 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
       }
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfileDropdown(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifPanel(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -182,6 +282,46 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
     }
   };
 
+  const getNotifIcon = (type: string) => {
+    switch (type) {
+      case 'warning': return 'warning';
+      case 'success': return 'celebration';
+      case 'update': return 'update';
+      default: return 'info';
+    }
+  };
+
+  const getNotifColor = (type: string) => {
+    switch (type) {
+      case 'warning': return 'bg-amber-100 dark:bg-amber-500/20 text-amber-600';
+      case 'success': return 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600';
+      case 'update': return 'bg-blue-100 dark:bg-blue-500/20 text-blue-600';
+      default: return 'bg-purple-100 dark:bg-purple-500/20 text-purple-600';
+    }
+  };
+
+  const getContactColor = (type: string) => {
+    switch (type) {
+      case 'email': return 'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400';
+      case 'whatsapp': return 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400';
+      case 'phone': return 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400';
+      default: return 'bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400';
+    }
+  };
+
+  const timeAgo = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 60) return `${minutes}m atrás`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h atrás`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d atrás`;
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  };
+
   // Get user info from session
   const userName = session?.user?.user_metadata?.full_name ||
     session?.user?.email?.split('@')[0] ||
@@ -255,14 +395,83 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
         </div>
 
         <div className="flex items-center gap-2 md:gap-4">
-          <button className="p-2.5 rounded-xl bg-[#f3f0f4] dark:bg-white/5 relative hover:bg-slate-200 dark:hover:bg-white/10 transition-colors">
-            <span className="material-symbols-outlined text-xl text-slate-600 dark:text-slate-400">notifications</span>
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-background-dark animate-pulse"></span>
-          </button>
+          {/* Notifications Button */}
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => setShowNotifPanel(!showNotifPanel)}
+              className="p-2.5 rounded-xl bg-[#f3f0f4] dark:bg-white/5 relative hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+            >
+              <span className="material-symbols-outlined text-xl text-slate-600 dark:text-slate-400">notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center px-1 border-2 border-white dark:border-background-dark">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notifications Dropdown */}
+            {showNotifPanel && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNotifPanel(false)} />
+                <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
+                    <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">notifications</span>
+                      Notificações
+                    </h3>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllAsRead}
+                        className="text-xs text-primary font-bold hover:underline"
+                      >
+                        Marcar todas como lidas
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length > 0 ? (
+                      <div className="divide-y divide-slate-50 dark:divide-white/5">
+                        {notifications.map(notif => {
+                          const isRead = readNotifIds.has(notif.id);
+                          return (
+                            <div
+                              key={notif.id}
+                              onClick={() => markNotificationAsRead(notif.id)}
+                              className={`p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer ${!isRead ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotifColor(notif.type)}`}>
+                                  <span className="material-symbols-outlined text-sm">{getNotifIcon(notif.type)}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className={`text-sm font-medium text-slate-900 dark:text-white truncate ${!isRead ? 'font-bold' : ''}`}>{notif.title}</p>
+                                    {!isRead && <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0"></span>}
+                                  </div>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notif.message}</p>
+                                  <p className="text-[10px] text-slate-400 mt-1">{timeAgo(notif.created_at)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center">
+                        <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600">notifications_off</span>
+                        <p className="text-sm text-slate-500 mt-2">Nenhuma notificação</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Help Button */}
           <button
-            onClick={() => setShowHelpModal(true)}
+            onClick={() => { setShowHelpModal(true); setShowTutorialsSection(false); }}
             className="hidden sm:flex p-2.5 rounded-xl bg-[#f3f0f4] dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
           >
             <span className="material-symbols-outlined text-xl text-slate-600 dark:text-slate-400">help</span>
@@ -354,12 +563,12 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
         showHelpModal && (
           <>
             <div
-              className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in duration-200"
               onClick={() => setShowHelpModal(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 pointer-events-auto animate-in zoom-in-95 fade-in duration-200">
-                <div className="flex items-center justify-between mb-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary">help</span>
                     Central de Ajuda
@@ -372,46 +581,123 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">support_agent</span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white">Suporte Técnico</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Entre em contato com nossa equipe de suporte para dúvidas técnicas.</p>
-                      <p className="text-sm text-primary font-medium mt-2">suporte@facilitapro.com.br</p>
-                    </div>
+                <div className="overflow-y-auto flex-1 px-6 pb-6">
+                  {/* Tab toggle: Contacts / Tutorials */}
+                  <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-4">
+                    <button
+                      onClick={() => setShowTutorialsSection(false)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${!showTutorialsSection ? 'bg-white dark:bg-primary text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}
+                    >
+                      <span className="material-symbols-outlined text-sm align-middle mr-1">support_agent</span>
+                      Contatos
+                    </button>
+                    <button
+                      onClick={() => setShowTutorialsSection(true)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${showTutorialsSection ? 'bg-white dark:bg-primary text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}
+                    >
+                      <span className="material-symbols-outlined text-sm align-middle mr-1">school</span>
+                      Tutoriais
+                    </button>
                   </div>
 
-                  <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
-                    <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">school</span>
+                  {/* Contacts Section */}
+                  {!showTutorialsSection && (
+                    <div className="space-y-3">
+                      {helpContacts.length > 0 ? (
+                        helpContacts.map(contact => (
+                          <div key={contact.id} className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-white/5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${getContactColor(contact.type)}`}>
+                              <span className="material-symbols-outlined">{contact.icon}</span>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-bold text-slate-900 dark:text-white">{contact.label}</h4>
+                              {contact.description && (
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{contact.description}</p>
+                              )}
+                              {contact.type === 'whatsapp' ? (
+                                <a
+                                  href={`https://wa.me/${contact.value.replace(/\D/g, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-primary font-medium mt-2 inline-block hover:underline"
+                                >
+                                  {contact.value}
+                                </a>
+                              ) : contact.type === 'email' ? (
+                                <a
+                                  href={`mailto:${contact.value}`}
+                                  className="text-sm text-primary font-medium mt-2 inline-block hover:underline"
+                                >
+                                  {contact.value}
+                                </a>
+                              ) : contact.type === 'link' ? (
+                                <a
+                                  href={contact.value}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-primary font-medium mt-2 inline-block hover:underline"
+                                >
+                                  {contact.value}
+                                </a>
+                              ) : (
+                                <p className="text-sm text-primary font-medium mt-2">{contact.value}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600">contacts</span>
+                          <p className="text-sm text-slate-500 mt-2">Nenhum contato disponível</p>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white">Tutoriais</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Acesse nossa base de conhecimento com guias e tutoriais.</p>
-                    </div>
-                  </div>
+                  )}
 
-                  <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-white/5 rounded-xl">
-                    <div className="w-10 h-10 bg-amber-100 dark:bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">chat</span>
+                  {/* Tutorials Section */}
+                  {showTutorialsSection && (
+                    <div className="space-y-3">
+                      {tutorials.length > 0 ? (
+                        tutorials.map(tutorial => (
+                          <div key={tutorial.id} className="bg-slate-50 dark:bg-white/5 rounded-xl overflow-hidden hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+                            {tutorial.video_url && (
+                              <div className="aspect-video">
+                                <iframe
+                                  src={tutorial.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                                  className="w-full h-full"
+                                  allowFullScreen
+                                  title={tutorial.title}
+                                />
+                              </div>
+                            )}
+                            <div className="p-4">
+                              <span className="text-[10px] uppercase font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">{tutorial.category}</span>
+                              <h4 className="font-bold text-slate-900 dark:text-white mt-2">{tutorial.title}</h4>
+                              {tutorial.description && (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tutorial.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600">school</span>
+                          <p className="text-sm text-slate-500 mt-2">Nenhum tutorial disponível ainda</p>
+                          <p className="text-xs text-slate-400 mt-1">Em breve teremos tutoriais para te ajudar!</p>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 dark:text-white">WhatsApp</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Atendimento rápido pelo WhatsApp em horário comercial.</p>
-                      <p className="text-sm text-primary font-medium mt-2">(11) 99999-9999</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
-                <button
-                  onClick={() => setShowHelpModal(false)}
-                  className="w-full mt-6 px-6 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition-colors"
-                >
-                  Fechar
-                </button>
+                <div className="p-4 border-t border-slate-100 dark:border-white/10 flex-shrink-0">
+                  <button
+                    onClick={() => setShowHelpModal(false)}
+                    className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </div>
           </>

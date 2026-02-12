@@ -11,7 +11,6 @@ const GoogleCalendarButton: React.FC<GoogleCalendarButtonProps> = ({ onConnectio
     const [isSyncing, setIsSyncing] = useState(false);
     const [connectedAt, setConnectedAt] = useState<string | null>(null);
     const [showMenu, setShowMenu] = useState(false);
-    const [showComingSoonModal, setShowComingSoonModal] = useState(false);
 
     useEffect(() => {
         checkConnectionStatus();
@@ -56,6 +55,12 @@ const GoogleCalendarButton: React.FC<GoogleCalendarButtonProps> = ({ onConnectio
                 setIsConnected(data.connected);
                 setConnectedAt(data.connectedAt);
                 onConnectionChange?.(data.connected);
+            } else {
+                // If 400 with needsConnection, user is not connected
+                const data = await response.json().catch(() => null);
+                if (data?.needsConnection) {
+                    setIsConnected(false);
+                }
             }
         } catch (error) {
             console.error('Error checking connection status:', error);
@@ -64,9 +69,49 @@ const GoogleCalendarButton: React.FC<GoogleCalendarButtonProps> = ({ onConnectio
         }
     };
 
-    const handleConnect = () => {
-        // Show coming soon modal instead of connecting
-        setShowComingSoonModal(true);
+    const handleConnect = async () => {
+        setIsLoading(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                alert('Você precisa estar logado para conectar o Google Calendar.');
+                setIsLoading(false);
+                return;
+            }
+
+            // Call the auth Edge Function to get the Google OAuth URL
+            const response = await fetch(
+                `${SUPABASE_URL}/functions/v1/google-calendar-auth`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+                alert(`Erro ao iniciar autenticação: ${errorData.error || 'Erro desconhecido'}`);
+                setIsLoading(false);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.authUrl) {
+                // Redirect user to Google OAuth consent screen
+                window.location.href = data.authUrl;
+            } else {
+                alert('Erro: URL de autenticação não recebida.');
+                setIsLoading(false);
+            }
+        } catch (error) {
+            console.error('Error connecting:', error);
+            alert('Erro ao conectar com Google Calendar. Tente novamente.');
+            setIsLoading(false);
+        }
     };
 
     const handleDisconnect = async () => {
@@ -125,6 +170,9 @@ const GoogleCalendarButton: React.FC<GoogleCalendarButtonProps> = ({ onConnectio
             if (response.ok) {
                 const data = await response.json();
                 alert(`Sincronização concluída! ${data.synced} eventos sincronizados${data.errors > 0 ? `, ${data.errors} erros` : ''}`);
+            } else {
+                const errorData = await response.json().catch(() => null);
+                alert(`Erro ao sincronizar: ${errorData?.error || 'Tente novamente'}`);
             }
         } catch (error) {
             console.error('Error syncing:', error);
@@ -146,70 +194,18 @@ const GoogleCalendarButton: React.FC<GoogleCalendarButtonProps> = ({ onConnectio
 
     if (!isConnected) {
         return (
-            <>
-                <button
-                    onClick={handleConnect}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/20 transition-all shadow-sm group"
-                >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-slate-700 dark:text-white">Conectar Google Calendar</span>
-                </button>
-
-                {/* Coming Soon Modal */}
-                {showComingSoonModal && (
-                    <>
-                        <div
-                            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
-                            onClick={() => setShowComingSoonModal(false)}
-                        />
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 pointer-events-auto animate-in zoom-in-95 fade-in duration-200">
-                                <div className="flex flex-col items-center text-center">
-                                    {/* Google Calendar Icon */}
-                                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                                        <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
-                                        </svg>
-                                    </div>
-
-                                    {/* Title */}
-                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                                        Em Breve!
-                                    </h3>
-
-                                    {/* Message */}
-                                    <p className="text-slate-600 dark:text-slate-300 mb-6">
-                                        A integração com o Google Agenda estará disponível apenas na versão do lançamento oficial.
-                                    </p>
-
-                                    {/* Additional info */}
-                                    <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl p-4 mb-6 w-full">
-                                        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                                            <span className="material-symbols-outlined text-xl">info</span>
-                                            <span className="text-sm font-medium">
-                                                Aguarde novidades em breve!
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Close Button */}
-                                    <button
-                                        onClick={() => setShowComingSoonModal(false)}
-                                        className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition-colors"
-                                    >
-                                        Entendi
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </>
+            <button
+                onClick={handleConnect}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/20 transition-all shadow-sm group"
+            >
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                <span className="text-sm font-semibold text-slate-700 dark:text-white">Conectar Google Calendar</span>
+            </button>
         );
     }
 

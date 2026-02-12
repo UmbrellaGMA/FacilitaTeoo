@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { formatCurrency, maskPhone } from '../lib/formatters';
+
 
 interface Client {
     id: string;
@@ -165,12 +167,7 @@ const Clients: React.FC = () => {
         client.phone?.includes(searchQuery)
     );
 
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(value);
-    };
+
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('pt-BR');
@@ -609,10 +606,12 @@ const Clients: React.FC = () => {
                                 <input
                                     type="tel"
                                     value={newClient.phone}
-                                    onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                                    onChange={(e) => setNewClient({ ...newClient, phone: maskPhone(e.target.value) })}
                                     placeholder="(11) 99999-9999"
+                                    maxLength={15}
                                     className="w-full px-4 py-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
                                 />
+
                             </div>
                             <div>
                                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 block">Interesse</label>

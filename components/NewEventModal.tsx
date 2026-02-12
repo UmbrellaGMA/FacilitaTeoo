@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL } from '../lib/supabase';
+import { formatCurrency, parseCurrencyToNumber } from '../lib/formatters';
+
 
 interface Lead {
     id: string;
@@ -117,6 +119,24 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
         // Get current user
         const { data: { user } } = await supabase.auth.getUser();
 
+        // Check if a lead with the same name already exists
+        const { data: existingLeads } = await supabase
+            .from('leads')
+            .select('*')
+            .ilike('name', newLeadData.name.trim())
+            .limit(1);
+
+        if (existingLeads && existingLeads.length > 0) {
+            // Reuse the existing lead
+            const existing = existingLeads[0];
+            setLeads([...leads, existing]);
+            setEventData({ ...eventData, lead_id: existing.id });
+            setNewLeadData({ name: '', email: '', phone: '', interest: '' });
+            setShowNewLeadForm(false);
+            return;
+        }
+
+        // No existing lead found, create a new one
         const { data, error } = await supabase
             .from('leads')
             .insert({
@@ -138,6 +158,7 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
         }
     };
 
+
     const createEvent = async (status: 'RASCUNHO' | 'ORÇAMENTO' | 'CONFIRMADO') => {
         if (!eventData.title.trim() || !eventData.event_date) return;
 
@@ -146,7 +167,7 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
         // Get current user
         const { data: { user } } = await supabase.auth.getUser();
 
-        const { error } = await supabase.from('events').insert({
+        const { data: insertedData, error } = await supabase.from('events').insert({
             title: eventData.title,
             description: eventData.description,
             event_date: eventData.event_date,
@@ -158,10 +179,31 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
             value: eventData.value,
             status: status,
             user_id: user?.id,
-        });
+            selected_equipment: selectedEquipment.length > 0 ? selectedEquipment : [],
+        }).select('id').single();
+
 
         setLoading(false);
-        if (!error) {
+        if (!error && insertedData) {
+            // Auto-sync to Google Calendar in background (non-blocking)
+            (async () => {
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) return;
+
+                    await fetch(`${SUPABASE_URL}/functions/v1/google-calendar-sync`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${session.access_token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ action: 'sync', eventId: insertedData.id }),
+                    });
+                } catch (e) {
+                    console.log('Google Calendar sync skipped:', e);
+                }
+            })();
+
             onEventCreated();
             onClose();
             setEventData({
@@ -247,11 +289,16 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-widest text-[#7c6189] mb-2 block">Número de Convidados</label>
                                     <input
-                                        type="number"
-                                        value={eventData.guests}
-                                        onChange={(e) => setEventData({ ...eventData, guests: parseInt(e.target.value) || 0 })}
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={eventData.guests || ''}
+                                        onChange={(e) => {
+                                            const raw = e.target.value.replace(/\D/g, '');
+                                            setEventData({ ...eventData, guests: raw ? parseInt(raw, 10) : 0 });
+                                        }}
                                         className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
                                     />
+
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-widest text-[#7c6189] mb-2 block">Data do Evento *</label>
@@ -284,11 +331,12 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-widest text-[#7c6189] mb-2 block">Valor (R$)</label>
                                     <input
-                                        type="number"
-                                        value={eventData.value}
-                                        onChange={(e) => setEventData({ ...eventData, value: parseFloat(e.target.value) || 0 })}
+                                        type="text"
+                                        value={formatCurrency(eventData.value)}
+                                        onChange={(e) => setEventData({ ...eventData, value: parseCurrencyToNumber(e.target.value) })}
                                         className="w-full px-4 py-3 bg-[#f3f0f4] dark:bg-white/5 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50"
                                     />
+
                                 </div>
                             </div>
                         </div>

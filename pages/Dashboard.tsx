@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { supabase } from '../lib/supabase';
+import { formatCurrency } from '../lib/formatters';
+
 
 interface Event {
   id: string;
@@ -167,9 +169,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
+
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);

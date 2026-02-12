@@ -310,6 +310,24 @@ const ContractsView: React.FC = () => {
   const createQuickLead = async () => {
     if (!newLeadData.name.trim()) return;
 
+    // Check if a lead with the same name already exists
+    const { data: existingLeads } = await supabase
+      .from('leads')
+      .select('*')
+      .ilike('name', newLeadData.name.trim())
+      .limit(1);
+
+    if (existingLeads && existingLeads.length > 0) {
+      // Reuse the existing lead
+      const existing = existingLeads[0];
+      setSelectedLeadId(existing.id);
+      setNewContractData({ ...newContractData, client_name: existing.name });
+      setNewLeadData({ name: '', email: '', phone: '' });
+      setShowNewLeadForm(false);
+      return;
+    }
+
+    // No existing lead found, create a new one
     const { data, error } = await supabase
       .from('leads')
       .insert({
@@ -330,6 +348,7 @@ const ContractsView: React.FC = () => {
       setShowNewLeadForm(false);
     }
   };
+
 
   // Template Functions
   const insertTag = (tag: string) => {
