@@ -27,6 +27,10 @@ const SMART_TAGS = {
     { label: 'Endereço da Empresa', tag: '[Endereço da Empresa]' },
     { label: 'CNPJ', tag: '[CNPJ]' },
   ],
+  assinaturas: [
+    { label: 'Assinatura do Cliente', tag: '[assinatura cliente]' },
+    { label: 'Assinatura da Empresa', tag: '[assinatura LOCATARIA]' },
+  ],
 };
 
 interface Lead {
@@ -888,11 +892,11 @@ const ContractsView: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => alert('Este recurso estará disponível no lançamento oficial da plataforma.')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-[#e2dbe6] dark:border-[#31253a] rounded-xl text-sm font-bold text-slate-400 cursor-not-allowed"
+              onClick={() => generateShareLink(viewingContract)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-[#e2dbe6] dark:border-[#31253a] rounded-xl text-sm font-bold hover:bg-[#f3f0f4] transition-all"
             >
-              <span className="material-symbols-outlined text-xl">lock</span>
-              Gerar Link (Em Breve)
+              <span className="material-symbols-outlined text-xl">link</span>
+              Gerar Link
             </button>
             <button onClick={printContract} className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-white/5 border border-[#e2dbe6] dark:border-[#31253a] rounded-xl text-sm font-bold hover:bg-[#f3f0f4] transition-all">
               <span className="material-symbols-outlined text-xl">print</span>

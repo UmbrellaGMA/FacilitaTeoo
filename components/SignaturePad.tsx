@@ -5,6 +5,7 @@ interface SignaturePadProps {
     onClear?: () => void;
     width?: number;
     height?: number;
+    initialSignature?: string;
 }
 
 const SignaturePad: React.FC<SignaturePadProps> = ({
@@ -12,6 +13,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
     onClear,
     width = 500,
     height = 200,
+    initialSignature,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -32,7 +34,17 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-    }, []);
+
+        // Load initial signature if provided
+        if (initialSignature) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                setHasSignature(true);
+            };
+            img.src = initialSignature;
+        }
+    }, [initialSignature]);
 
     const getPosition = (e: React.MouseEvent | React.TouchEvent) => {
         const canvas = canvasRef.current;

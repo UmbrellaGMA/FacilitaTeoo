@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
 import EquipmentView from './pages/Equipment';
 import ContractsView from './pages/Contracts';
-import MapView from './pages/Map';
 import CalendarView from './pages/Calendar';
 import EventsView from './pages/Events';
 import SettingsView from './pages/Settings';
@@ -106,7 +105,6 @@ const App: React.FC = () => {
       case 'clients': return <Clients />;
       case 'equipment': return <EquipmentView />;
       case 'contracts': return <ContractsView />;
-      case 'map': return <MapView />;
       case 'calendar': return <CalendarView />;
       case 'events': return <EventsView />;
       case 'settings': return <SettingsView session={session} onViewChange={setActiveView} />;

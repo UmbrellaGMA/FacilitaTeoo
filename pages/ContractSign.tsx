@@ -15,6 +15,7 @@ interface ContractData {
     watermark_url?: string;
     signature_data?: string;
     signed_at?: string;
+    user_id?: string;
 }
 
 const ContractSign: React.FC = () => {
@@ -25,6 +26,7 @@ const ContractSign: React.FC = () => {
     const [signing, setSigning] = useState(false);
     const [signed, setSigned] = useState(false);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
+    const [adminSignature, setAdminSignature] = useState<string | null>(null);
 
     useEffect(() => {
         fetchContract();
@@ -55,7 +57,29 @@ const ContractSign: React.FC = () => {
             setSigned(true);
         }
 
+        // Fetch admin default signature if contract has user_id
+        if (data.user_id) {
+            await fetchAdminSignature(data.user_id);
+        }
+
         setLoading(false);
+    };
+
+    const fetchAdminSignature = async (userId: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('admin_signatures')
+                .select('signature_data')
+                .eq('user_id', userId)
+                .eq('is_default', true)
+                .single();
+
+            if (!error && data) {
+                setAdminSignature(data.signature_data);
+            }
+        } catch (error) {
+            console.error('Error fetching admin signature:', error);
+        }
     };
 
     const handleSignature = async (signatureData: string) => {
@@ -99,6 +123,86 @@ const ContractSign: React.FC = () => {
             month: 'long',
             year: 'numeric',
         });
+    };
+
+    const renderContractContent = () => {
+        if (!contract) return '';
+        let content = contract.filled_content || 'Conteúdo do contrato não disponível.';
+
+        // Check for signature tags
+        const hasClientSig = content.includes('[assinatura cliente]') || content.includes('[ASSINATURA CLIENTE]');
+        const hasAdminSig = content.includes('[assinatura LOCATARIA]') || content.includes('[ASSINATURA LOCATARIA]');
+
+        // If no signature tags or not signed, return plain content
+        if (!hasClientSig && !hasAdminSig) {
+            return content;
+        }
+
+        // Split content by signature tags
+        const parts: (string | React.ReactNode)[] = [];
+        let lastIndex = 0;
+
+        // Regex to find all signature tags (case-insensitive)
+        const tagRegex = /\[assinatura (cliente|CLIENTE|LOCATARIA|locataria)\]/gi;
+        let match;
+
+        while ((match = tagRegex.exec(content)) !== null) {
+            // Add text before the tag
+            if (match.index > lastIndex) {
+                parts.push(content.substring(lastIndex, match.index));
+            }
+
+            const tagType = match[1].toUpperCase();
+
+            if (tagType === 'CLIENTE') {
+                if (signed && contract.signature_data) {
+                    parts.push(
+                        <div key={`sig-${match.index}`} className="inline-block mx-2 my-1 align-middle">
+                            <img
+                                src={contract.signature_data}
+                                alt="Assinatura do Cliente"
+                                className="max-h-16 border-b-2 border-slate-300"
+                                style={{ display: 'inline-block', maxWidth: '200px' }}
+                            />
+                        </div>
+                    );
+                } else {
+                    parts.push(
+                        <span key={`sig-${match.index}`} className="inline-block mx-2 px-4 py-1 border-b-2 border-dashed border-slate-400 text-slate-500 italic text-sm">
+                            [Aguardando Assinatura do Cliente]
+                        </span>
+                    );
+                }
+            } else if (tagType === 'LOCATARIA') {
+                if (adminSignature) {
+                    parts.push(
+                        <div key={`sig-${match.index}`} className="inline-block mx-2 my-1 align-middle">
+                            <img
+                                src={adminSignature}
+                                alt="Assinatura da Empresa"
+                                className="max-h-16 border-b-2 border-slate-300"
+                                style={{ display: 'inline-block', maxWidth: '200px' }}
+                            />
+                        </div>
+                    );
+                } else {
+                    parts.push(
+                        <span key={`sig-${match.index}`} className="inline-block mx-2 px-4 py-1 border-b-2 border-dashed border-slate-400 text-slate-500 italic text-sm">
+                            [Assinatura da Empresa]
+                        </span>
+                    );
+                }
+            }
+
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add remaining content
+        if (lastIndex < content.length) {
+            parts.push(content.substring(lastIndex));
+        }
+
+        return parts;
     };
 
     if (loading) {
@@ -214,7 +318,7 @@ const ContractSign: React.FC = () => {
                             className="prose prose-slate max-w-none relative z-10"
                             style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}
                         >
-                            {contract.filled_content || 'Conteúdo do contrato não disponível.'}
+                            {renderContractContent()}
                         </div>
                     </div>
 

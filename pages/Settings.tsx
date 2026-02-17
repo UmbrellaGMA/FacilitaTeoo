@@ -1,11 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { ViewType } from '../types';
 import { maskCPF, maskPhone } from '../lib/formatters';
 import GoogleCalendarButton from '../components/GoogleCalendarButton';
+import SignaturePad from '../components/SignaturePad';
 
+interface AdminSignature {
+  id: string;
+  name: string;
+  signature_data: string;
+  is_default: boolean;
+  created_at: string;
+}
 
 interface SettingsViewProps {
   session: Session | null;
@@ -34,6 +41,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingSubscription, setLoadingSubscription] = useState(false);
 
+  // Admin Signatures states
+  const [adminSignatures, setAdminSignatures] = useState<AdminSignature[]>([]);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signatureName, setSignatureName] = useState('');
+  const [editingSignature, setEditingSignature] = useState<AdminSignature | null>(null);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [savingSignature, setSavingSignature] = useState(false);
+
   // Load user data from session
   useEffect(() => {
     if (session?.user) {
@@ -48,6 +63,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
       fetchUserRole();
       // Fetch subscription data
       fetchSubscriptionData();
+      // Fetch admin signatures
+      fetchAdminSignatures();
     }
   }, [session]);
 
@@ -160,6 +177,117 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
     } catch (error) {
       console.error('Error fetching events count:', error);
     }
+  };
+
+  // Admin Signatures Functions
+  const fetchAdminSignatures = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_signatures')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) setAdminSignatures(data);
+    } catch (error) {
+      console.error('Error fetching admin signatures:', error);
+    }
+  };
+
+  const saveAdminSignature = async (signatureData: string) => {
+    setSignatureError(null);
+
+    if (!signatureName.trim()) {
+      setSignatureError('Digite um nome para a assinatura');
+      return;
+    }
+
+    setSavingSignature(true);
+    try {
+      if (editingSignature) {
+        // Update existing signature
+        const { error } = await supabase
+          .from('admin_signatures')
+          .update({
+            name: signatureName,
+            signature_data: signatureData,
+          })
+          .eq('id', editingSignature.id);
+
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Assinatura atualizada com sucesso!' });
+      } else {
+        // Create new signature
+        const { error } = await supabase
+          .from('admin_signatures')
+          .insert({
+            name: signatureName,
+            signature_data: signatureData,
+            user_id: session?.user?.id,
+            is_default: adminSignatures.length === 0, // First signature is default
+          });
+
+        if (error) throw error;
+        setMessage({ type: 'success', text: 'Assinatura cadastrada com sucesso!' });
+      }
+
+      setShowSignatureModal(false);
+      setSignatureName('');
+      setEditingSignature(null);
+      fetchAdminSignatures();
+    } catch (error: any) {
+      console.error('Error saving signature:', error);
+      setSignatureError('Erro ao salvar assinatura: ' + error.message);
+    } finally {
+      setSavingSignature(false);
+    }
+  };
+
+  const setDefaultSignature = async (id: string) => {
+    try {
+      // Unset all defaults
+      await supabase
+        .from('admin_signatures')
+        .update({ is_default: false })
+        .eq('user_id', session?.user?.id);
+
+      // Set new default
+      const { error } = await supabase
+        .from('admin_signatures')
+        .update({ is_default: true })
+        .eq('id', id);
+
+      if (error) throw error;
+      setMessage({ type: 'success', text: 'Assinatura padrão definida!' });
+      fetchAdminSignatures();
+    } catch (error: any) {
+      console.error('Error setting default signature:', error);
+      setMessage({ type: 'error', text: 'Erro ao definir assinatura padrão' });
+    }
+  };
+
+  const deleteAdminSignature = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta assinatura?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('admin_signatures')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setMessage({ type: 'success', text: 'Assinatura excluída com sucesso!' });
+      fetchAdminSignatures();
+    } catch (error: any) {
+      console.error('Error deleting signature:', error);
+      setMessage({ type: 'error', text: 'Erro ao excluir assinatura' });
+    }
+  };
+
+  const openEditSignature = (signature: AdminSignature) => {
+    setEditingSignature(signature);
+    setSignatureName(signature.name);
+    setShowSignatureModal(true);
   };
 
   // Update profile
@@ -547,6 +675,112 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
             </div>
           </section>
 
+          {/* Signature Management Section */}
+          <section className="bg-white dark:bg-white/5 rounded-3xl border border-[#e2dbe6] dark:border-white/10 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-[#e2dbe6] dark:border-white/10 bg-slate-50/50 dark:bg-transparent">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">Assinaturas da Empresa</h3>
+                  <p className="text-sm text-[#7c6189]">Gerencie as assinaturas digitais para uso nos contratos.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingSignature(null);
+                    setSignatureName('');
+                    setShowSignatureModal(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20"
+                >
+                  <span className="material-symbols-outlined text-lg">add</span>
+                  Nova Assinatura
+                </button>
+              </div>
+            </div>
+            <div className="p-8">
+              {adminSignatures.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {adminSignatures.map((signature) => (
+                    <div
+                      key={signature.id}
+                      className="bg-slate-50 dark:bg-white/5 rounded-2xl p-6 border border-[#e2dbe6] dark:border-white/10 hover:border-primary transition-all group"
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            {signature.name}
+                            {signature.is_default && (
+                              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                                Padrão
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-xs text-[#7c6189] mt-1">
+                            Criada em {new Date(signature.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-4 mb-4">
+                        <img
+                          src={signature.signature_data}
+                          alt={signature.name}
+                          className="max-h-20 mx-auto object-contain"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!signature.is_default && (
+                          <button
+                            onClick={() => setDefaultSignature(signature.id)}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/20 transition-all"
+                          >
+                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                            Tornar Padrão
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openEditSignature(signature)}
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-500/20 transition-all"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => deleteAdminSignature(signature.id)}
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 rounded-lg text-xs font-bold hover:bg-red-200 dark:hover:bg-red-500/20 transition-all"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="material-symbols-outlined text-4xl text-slate-400">draw</span>
+                  </div>
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-2">Nenhuma assinatura cadastrada</h4>
+                  <p className="text-sm text-[#7c6189] mb-6">
+                    Cadastre assinaturas digitais para usar nos contratos com a tag [assinatura LOCATARIA]
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingSignature(null);
+                      setSignatureName('');
+                      setShowSignatureModal(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-hover transition-all shadow-lg shadow-primary/20"
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                    Criar Primeira Assinatura
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="bg-white dark:bg-white/5 rounded-3xl border border-[#e2dbe6] dark:border-white/10 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-[#e2dbe6] dark:border-white/10 bg-slate-50/50 dark:bg-transparent">
               <h3 className="text-lg font-black text-slate-900 dark:text-white">Segurança</h3>
@@ -600,6 +834,70 @@ const SettingsView: React.FC<SettingsViewProps> = ({ session, onViewChange }) =>
           </section>
         </div>
       </div>
+
+      {/* Signature Modal */}
+      {showSignatureModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => { setShowSignatureModal(false); setSignatureError(null); }}
+          />
+          <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg animate-in zoom-in-95 fade-in duration-300">
+            <div className="p-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                  {editingSignature ? 'Editar Assinatura' : 'Nova Assinatura'}
+                </h2>
+                <p className="text-sm text-slate-500">Desenhe sua assinatura abaixo</p>
+              </div>
+              <button
+                onClick={() => { setShowSignatureModal(false); setSignatureError(null); }}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {signatureError && (
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/20 flex items-center gap-2 text-sm font-medium animate-in fade-in duration-200">
+                  <span className="material-symbols-outlined text-lg">error</span>
+                  {signatureError}
+                </div>
+              )}
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-[#7c6189] mb-2 block">
+                  Nome da Assinatura
+                </label>
+                <input
+                  type="text"
+                  value={signatureName}
+                  onChange={(e) => { setSignatureName(e.target.value); setSignatureError(null); }}
+                  placeholder="Ex: Diretor, Gerente, Empresa, etc."
+                  className={`w-full rounded-xl py-3 px-4 border ${signatureError && !signatureName.trim() ? 'border-red-400 dark:border-red-500' : 'border-[#e2dbe6] dark:border-white/10'} bg-slate-50 dark:bg-white/5 text-sm font-medium focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-slate-900 dark:text-white`}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-[#7c6189] mb-2 block">
+                  Desenhe a Assinatura
+                </label>
+                <SignaturePad
+                  onSave={saveAdminSignature}
+                  initialSignature={editingSignature?.signature_data}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-amber-50 dark:bg-amber-500/10 border-t border-amber-200 dark:border-amber-500/20 rounded-b-2xl">
+              <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                <span className="material-symbols-outlined text-lg flex-shrink-0">info</span>
+                Esta assinatura será usada nos contratos quando utilizar a tag [assinatura LOCATARIA]
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

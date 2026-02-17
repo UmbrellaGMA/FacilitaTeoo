@@ -5,7 +5,6 @@ export type ViewType =
   | 'equipment'
   | 'contracts'
   | 'events'
-  | 'map'
   | 'calendar'
   | 'settings'
   | 'admin';

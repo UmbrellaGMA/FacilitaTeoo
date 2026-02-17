@@ -67,7 +67,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen, onC
     { id: 'equipment', label: 'Equipamentos', icon: 'inventory_2' },
     { id: 'contracts', label: 'Contratos', icon: 'description' },
     { id: 'events', label: 'Eventos', icon: 'event_note' },
-    { id: 'map', label: 'Mapa', icon: 'map' },
     { id: 'settings', label: 'Ajustes', icon: 'settings' },
     { id: 'admin', label: 'Painel Master', icon: 'admin_panel_settings', special: true, masterOnly: true },
   ];
