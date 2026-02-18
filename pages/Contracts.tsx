@@ -131,6 +131,7 @@ const ContractsView: React.FC = () => {
   const [editingCustomTag, setEditingCustomTag] = useState<CustomTag | null>(null);
   const [newCustomTag, setNewCustomTag] = useState({ name: '', tag: '', options: '' });
   const [copySuccess, setCopySuccess] = useState(false);
+  const [adminSignature, setAdminSignature] = useState<string | null>(null);
 
   // State for mobile tags panel
   const [showMobileTags, setShowMobileTags] = React.useState(false);
@@ -142,7 +143,24 @@ const ContractsView: React.FC = () => {
     fetchLeads();
     fetchEquipment();
     fetchCustomTags();
+    fetchAdminSignature();
   }, []);
+
+  const fetchAdminSignature = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('admin_signatures')
+        .select('signature_data')
+        .eq('user_id', user.id)
+        .eq('is_default', true)
+        .single();
+      if (data) setAdminSignature(data.signature_data);
+    } catch (error) {
+      console.error('Error fetching admin signature:', error);
+    }
+  };
 
   const fetchContracts = async () => {
     try {
@@ -739,6 +757,26 @@ const ContractsView: React.FC = () => {
     }
   };
 
+  const processSignatureTags = (content: string) => {
+    let processed = content;
+
+    // Substituir tag da assinatura da empresa
+    const adminSigRegex = /\[assinatura LOCATARIA\]|\[ASSINATURA LOCATARIA\]|\[assinatura locataria\]/gi;
+    if (adminSignature) {
+      processed = processed.replace(adminSigRegex, `<img src="${adminSignature}" alt="Assinatura da Empresa" style="max-height: 80px; display: inline-block; border-bottom: 2px solid #ccc; margin: 8px 4px;" />`);
+    }
+
+    // Substituir tag da assinatura do cliente
+    const clientSigRegex = /\[assinatura cliente\]|\[ASSINATURA CLIENTE\]|\[assinatura CLIENTE\]/gi;
+    if (viewingContract?.signature_data) {
+      processed = processed.replace(clientSigRegex, `<img src="${viewingContract.signature_data}" alt="Assinatura do Cliente" style="max-height: 80px; display: inline-block; border-bottom: 2px solid #ccc; margin: 8px 4px;" />`);
+    } else {
+      processed = processed.replace(clientSigRegex, `<span style="display: inline-block; min-width: 200px; border-bottom: 2px dashed #999; padding: 4px 8px; color: #999; font-style: italic; font-size: 12px;">Aguardando Assinatura</span>`);
+    }
+
+    return processed;
+  };
+
   const printContract = () => {
     const printContent = printRef.current;
     if (!printContent) return;
@@ -754,6 +792,8 @@ const ContractsView: React.FC = () => {
     const logoUrl = template?.logo_url || viewingContract?.logo_url || '';
     const watermarkUrl = template?.watermark_url || viewingContract?.watermark_url || '';
     const primaryColor = viewingContract?.color || template?.color || '#a413ec';
+
+    const contentWithSignatures = processSignatureTags(viewingContract?.filled_content || '');
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -800,11 +840,9 @@ const ContractsView: React.FC = () => {
             .content {
               white-space: pre-wrap;
             }
-            .footer {
-              margin-top: 50px;
-              text-align: center;
-              font-size: 12px;
-              color: #666;
+            .content img {
+              max-height: 80px;
+              vertical-align: middle;
             }
             @media print {
               body { padding: 20px; }
@@ -819,10 +857,7 @@ const ContractsView: React.FC = () => {
             <h1>CONTRATO</h1>
             <p>Cliente: ${viewingContract?.client_name} | Tipo: ${viewingContract?.type}</p>
           </div>
-          <div class="content">${viewingContract?.filled_content || ''}</div>
-          <div class="footer">
-            <p>Documento gerado pelo Facilita Teoo</p>
-          </div>
+          <div class="content">${contentWithSignatures}</div>
         </body>
       </html>
     `);
@@ -968,7 +1003,7 @@ const ContractsView: React.FC = () => {
           <div ref={printRef} className="p-8 bg-white dark:bg-[#1a141f]">
             <div
               className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-[#161118] dark:text-white leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: viewingContract.filled_content || 'Conteúdo não disponível.' }}
+              dangerouslySetInnerHTML={{ __html: processSignatureTags(viewingContract.filled_content || 'Conteúdo não disponível.') }}
             />
           </div>
         </div>
