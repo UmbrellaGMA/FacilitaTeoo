@@ -15,9 +15,10 @@ interface NewEventModalProps {
     isOpen: boolean;
     onClose: () => void;
     onEventCreated: () => void;
+    eventToEdit?: any; // strict typing would require importing Event from somewhere shared, using any for now to avoid circular deps or huge refactor
 }
 
-const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventCreated }) => {
+const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventCreated, eventToEdit }) => {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [loading, setLoading] = useState(false);
     const [showNewLeadForm, setShowNewLeadForm] = useState(false);
@@ -66,6 +67,44 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
             fetchEquipment();
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (isOpen && eventToEdit) {
+            setEventData({
+                title: eventToEdit.title || '',
+                description: eventToEdit.description || '',
+                event_date: eventToEdit.event_date || '',
+                event_time: eventToEdit.event_time || '',
+                location: eventToEdit.location || '',
+                guests: eventToEdit.guests || 0,
+                type: eventToEdit.type || eventToEdit.event_type || 'casamento',
+                lead_id: eventToEdit.lead_id || '',
+                value: eventToEdit.value || 0,
+            });
+
+            if (eventToEdit.selected_equipment) {
+                setSelectedEquipment(eventToEdit.selected_equipment.map((e: any) => ({
+                    id: e.id,
+                    name: e.name,
+                    quantity: e.quantity || 1
+                })));
+            }
+        } else if (isOpen && !eventToEdit) {
+            // Reset form for new event
+            setEventData({
+                title: '',
+                description: '',
+                event_date: '',
+                event_time: '',
+                location: '',
+                guests: 0,
+                type: 'casamento',
+                lead_id: '',
+                value: 0,
+            });
+            setSelectedEquipment([]);
+        }
+    }, [isOpen, eventToEdit]);
 
     const fetchEquipment = async () => {
         const { data } = await supabase
@@ -164,10 +203,11 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
 
         setLoading(true);
 
-        // Get current user
         const { data: { user } } = await supabase.auth.getUser();
+        let error;
+        let insertedData;
 
-        const { data: insertedData, error } = await supabase.from('events').insert({
+        const payload = {
             title: eventData.title,
             description: eventData.description,
             event_date: eventData.event_date,
@@ -180,7 +220,24 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
             status: status,
             user_id: user?.id,
             selected_equipment: selectedEquipment.length > 0 ? selectedEquipment : [],
-        }).select('id').single();
+        };
+
+        if (eventToEdit) {
+            const { error: updateError } = await supabase
+                .from('events')
+                .update(payload)
+                .eq('id', eventToEdit.id);
+            error = updateError;
+            insertedData = { id: eventToEdit.id };
+        } else {
+            const { data, error: insertError } = await supabase
+                .from('events')
+                .insert(payload)
+                .select('id')
+                .single();
+            error = insertError;
+            insertedData = data;
+        }
 
 
         setLoading(false);
@@ -245,8 +302,8 @@ const NewEventModal: React.FC<NewEventModalProps> = ({ isOpen, onClose, onEventC
                             <span className="material-symbols-outlined text-primary">add_circle</span>
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-[#161118] dark:text-white">Novo Evento</h2>
-                            <p className="text-xs text-[#7c6189]">Preencha os dados do evento</p>
+                            <h2 className="text-xl font-bold text-[#161118] dark:text-white">{eventToEdit ? 'Editar Evento' : 'Novo Evento'}</h2>
+                            <p className="text-xs text-[#7c6189]">{eventToEdit ? 'Edite os dados do evento' : 'Preencha os dados do evento'}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors">

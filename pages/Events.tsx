@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, SUPABASE_URL } from '../lib/supabase';
 import { formatCurrency } from '../lib/formatters';
+import NewEventModal from '../components/NewEventModal';
 
 interface EventEquipment {
     id: string;
@@ -37,6 +38,7 @@ const Events: React.FC = () => {
     const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
 
     useEffect(() => {
         fetchEvents();
@@ -443,12 +445,22 @@ const Events: React.FC = () => {
                                     <h2 className="text-2xl font-black truncate">{selectedEvent.title}</h2>
                                     <p className="text-white/80 text-sm mt-1">{getEventTypeLabel(selectedEvent.type || selectedEvent.event_type)}</p>
                                 </div>
-                                <button
-                                    onClick={() => setShowModal(false)}
-                                    className="p-2 hover:bg-white/20 rounded-full transition-colors flex-shrink-0"
-                                >
-                                    <span className="material-symbols-outlined">close</span>
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setShowEditModal(true)}
+                                        className="p-2 hover:bg-white/20 rounded-full transition-colors flex-shrink-0"
+                                        title="Editar Evento"
+                                    >
+                                        <span className="material-symbols-outlined">edit</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setShowModal(false)}
+                                        className="p-2 hover:bg-white/20 rounded-full transition-colors flex-shrink-0"
+                                        title="Fechar"
+                                    >
+                                        <span className="material-symbols-outlined">close</span>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Countdown badge */}
@@ -658,7 +670,30 @@ const Events: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+
+
+            {/* Edit Event Modal */}
+            <NewEventModal
+                isOpen={showEditModal}
+                onClose={() => setShowEditModal(false)}
+                onEventCreated={() => {
+                    fetchEvents();
+                    setShowEditModal(false);
+                    // Also update selectedEvent if it's the one being edited
+                    if (selectedEvent) {
+                        // We might need to re-fetch the specific event or just close the details modal
+                        // For simplicity, let's close the details modal too or re-fetch it.
+                        // Actually fetchEvents refreshes the list in background. 
+                        // Ideally we should update selectedEvent with new data.
+                        // But for now let's just close the edit modal.
+                        // A better UX would be to re-fetch.
+                        // Let's close the details modal to avoid stale data display
+                        setShowModal(false);
+                    }
+                }}
+                eventToEdit={selectedEvent}
+            />
+        </div >
     );
 };
 
