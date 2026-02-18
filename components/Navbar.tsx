@@ -63,6 +63,9 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
   const [helpContacts, setHelpContacts] = useState<HelpContactItem[]>([]);
   const [tutorials, setTutorials] = useState<TutorialItem[]>([]);
   const [showTutorialsSection, setShowTutorialsSection] = useState(false);
+  const [showAllNotifsModal, setShowAllNotifsModal] = useState(false);
+  const [allNotifications, setAllNotifications] = useState<NotificationItem[]>([]);
+  const [expandedNotifId, setExpandedNotifId] = useState<string | null>(null);
 
   useEffect(() => {
     if (session?.user) {
@@ -121,6 +124,21 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
     if (data) setTutorials(data);
+  };
+
+  const fetchAllNotifications = async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+    if (data) setAllNotifications(data);
+  };
+
+  const openAllNotifications = () => {
+    setShowNotifPanel(false);
+    fetchAllNotifications();
+    setShowAllNotifsModal(true);
   };
 
   const markNotificationAsRead = async (notifId: string) => {
@@ -432,11 +450,15 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
                       <div className="divide-y divide-slate-50 dark:divide-white/5">
                         {notifications.map(notif => {
                           const isRead = readNotifIds.has(notif.id);
+                          const isExpanded = expandedNotifId === notif.id;
                           return (
                             <div
                               key={notif.id}
-                              onClick={() => markNotificationAsRead(notif.id)}
-                              className={`p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer ${!isRead ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+                              onClick={() => {
+                                markNotificationAsRead(notif.id);
+                                setExpandedNotifId(isExpanded ? null : notif.id);
+                              }}
+                              className={`p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer ${!isRead ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
                             >
                               <div className="flex items-start gap-3">
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotifColor(notif.type)}`}>
@@ -444,10 +466,10 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <p className={`text-sm font-medium text-slate-900 dark:text-white truncate ${!isRead ? 'font-bold' : ''}`}>{notif.title}</p>
+                                    <p className={`text-sm font-medium text-slate-900 dark:text-white ${!isExpanded ? 'truncate' : ''} ${!isRead ? 'font-bold' : ''}`}>{notif.title}</p>
                                     {!isRead && <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0"></span>}
                                   </div>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notif.message}</p>
+                                  <p className={`text-xs text-slate-500 dark:text-slate-400 mt-0.5 ${!isExpanded ? 'line-clamp-2' : ''}`}>{notif.message}</p>
                                   <p className="text-[10px] text-slate-400 mt-1">{timeAgo(notif.created_at)}</p>
                                 </div>
                               </div>
@@ -461,6 +483,16 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
                         <p className="text-sm text-slate-500 mt-2">Nenhuma notificação</p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Ver todas button */}
+                  <div className="p-3 border-t border-slate-100 dark:border-white/10">
+                    <button
+                      onClick={openAllNotifications}
+                      className="w-full text-center text-sm font-bold text-primary hover:text-primary-hover transition-colors py-2 rounded-xl hover:bg-primary/5"
+                    >
+                      Ver todas as notificações
+                    </button>
                   </div>
                 </div>
               </>
@@ -701,6 +733,79 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, session, onViewChange }) =>
           </>
         )
       }
+
+      {/* All Notifications Modal */}
+      {showAllNotifsModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+            onClick={() => setShowAllNotifsModal(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">notifications</span>
+                  Todas as Notificações
+                </h3>
+                <button
+                  onClick={() => setShowAllNotifsModal(false)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-outlined text-slate-500">close</span>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 divide-y divide-slate-50 dark:divide-white/5">
+                {allNotifications.length > 0 ? (
+                  allNotifications.map(notif => {
+                    const isRead = readNotifIds.has(notif.id);
+                    const isExpanded = expandedNotifId === notif.id;
+                    return (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          markNotificationAsRead(notif.id);
+                          setExpandedNotifId(isExpanded ? null : notif.id);
+                        }}
+                        className={`p-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer ${!isRead ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotifColor(notif.type)}`}>
+                            <span className="material-symbols-outlined text-sm">{getNotifIcon(notif.type)}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className={`text-sm font-medium text-slate-900 dark:text-white ${!isExpanded ? 'truncate' : ''} ${!isRead ? 'font-bold' : ''}`}>{notif.title}</p>
+                              {!isRead && <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0"></span>}
+                            </div>
+                            <p className={`text-xs text-slate-500 dark:text-slate-400 mt-0.5 ${!isExpanded ? 'line-clamp-2' : ''}`}>{notif.message}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{timeAgo(notif.created_at)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center">
+                    <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600">notifications_off</span>
+                    <p className="text-sm text-slate-500 mt-2">Nenhuma notificação</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-slate-100 dark:border-white/10 flex-shrink-0">
+                <button
+                  onClick={() => setShowAllNotifsModal(false)}
+                  className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { PlatformSettings } from '../types';
-import { formatCurrency, parseCurrencyToNumber } from '../lib/formatters';
+import { formatCurrency, parseCurrencyToNumber, maskPhone } from '../lib/formatters';
 
 
 type AdminTab = 'users' | 'settings' | 'plans' | 'contacts' | 'notifications' | 'tutorials';
@@ -620,6 +620,12 @@ const AdminPanel: React.FC = () => {
                                                             <div>
                                                                 <p className="font-bold text-[#161118] dark:text-white text-sm">{user.full_name || 'Sem nome'}</p>
                                                                 <p className="text-xs text-[#7c6189]">{user.email}</p>
+                                                                {user.phone && (
+                                                                    <p className="text-xs text-[#7c6189] mt-0.5 flex items-center gap-1">
+                                                                        <span className="material-symbols-outlined text-[10px]">phone</span>
+                                                                        {maskPhone(user.phone)}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -990,9 +996,9 @@ const AdminPanel: React.FC = () => {
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex items-start gap-3">
                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${notif.type === 'warning' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-600' :
-                                                        notif.type === 'success' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600' :
-                                                            notif.type === 'update' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-600' :
-                                                                'bg-purple-100 dark:bg-purple-500/20 text-purple-600'}`}>
+                                                    notif.type === 'success' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600' :
+                                                        notif.type === 'update' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-600' :
+                                                            'bg-purple-100 dark:bg-purple-500/20 text-purple-600'}`}>
                                                     <span className="material-symbols-outlined text-sm">{notif.type === 'warning' ? 'warning' : notif.type === 'success' ? 'celebration' : notif.type === 'update' ? 'update' : 'info'}</span>
                                                 </div>
                                                 <div>
@@ -1078,9 +1084,9 @@ const AdminPanel: React.FC = () => {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4">
                                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${contact.type === 'email' ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-600' :
-                                                        contact.type === 'whatsapp' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600' :
-                                                            contact.type === 'phone' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-600' :
-                                                                'bg-purple-100 dark:bg-purple-500/20 text-purple-600'}`}>
+                                                    contact.type === 'whatsapp' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600' :
+                                                        contact.type === 'phone' ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-600' :
+                                                            'bg-purple-100 dark:bg-purple-500/20 text-purple-600'}`}>
                                                     <span className="material-symbols-outlined">{contact.icon}</span>
                                                 </div>
                                                 <div>
