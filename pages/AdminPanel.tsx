@@ -325,19 +325,30 @@ const AdminPanel: React.FC = () => {
 
         if (!confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) return;
 
-        // Need to delete via Edge function if we want to delete from Auth as well
-        // For now, deleting profile triggers cascade usually, but Auth user remains. 
-        // Let's stick to profile delete for now as per previous code
-        const { error } = await supabase
-            .from('user_profiles')
-            .delete()
-            .eq('id', user.id);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                showMessage('error', 'Sessão expirada. Faça login novamente.');
+                return;
+            }
 
-        if (error) {
-            showMessage('error', 'Erro ao excluir usuário');
-        } else {
-            showMessage('success', 'Usuário excluído');
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-actions`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: 'delete_user', userId: user.id, payload: {} }),
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Erro ao excluir usuário');
+
+            showMessage('success', 'Usuário excluído com sucesso');
             fetchData();
+        } catch (error: any) {
+            console.error('Error deleting user:', error);
+            showMessage('error', error.message || 'Erro ao excluir usuário');
         }
     };
 

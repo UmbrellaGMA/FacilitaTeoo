@@ -150,7 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen, onC
 
         {/* Bottom Action */}
         <div className="flex flex-col gap-4">
-          {['admin@facilitatoo.com', 'adminmaster@admin.com'].includes(userProfile?.email || '') && (
+          {userProfile?.role === 'MASTER' && (
             <button
               onClick={() => {
                 onViewChange('admin');

@@ -727,7 +727,7 @@ const ContractsView: React.FC = () => {
       fetchContracts();
     }
 
-    const link = `${window.location.origin}/contrato/${token}`;
+    const link = `${window.location.origin}/assinar/${token}`;
     setShareLink(link);
   };
 

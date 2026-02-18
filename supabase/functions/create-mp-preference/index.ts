@@ -1,8 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Initialize Mercado Pago
-// NOTE: It is recommended to use Deno.env.get("MP_ACCESS_TOKEN") for security
-const ACCESS_TOKEN = "APP_USR-4332005898484834-020720-626589c734f048a0910ee01c5fb3e991-237865162";
+// Initialize Mercado Pago - token via variável de ambiente do Supabase
+const ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN") ?? "";
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
