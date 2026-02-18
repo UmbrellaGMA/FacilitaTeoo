@@ -54,12 +54,17 @@ const App: React.FC = () => {
       // 1. Check User Role
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('role')
+        .select('role, created_at')
         .eq('id', userId)
         .single();
 
       const master = profile?.role === 'MASTER';
       setIsMaster(master);
+
+      if (master) {
+        setSubscriptionStatus('active');
+        return;
+      }
 
       // 2. Check Subscription
       const { data: sub } = await supabase
@@ -71,11 +76,26 @@ const App: React.FC = () => {
       if (sub) {
         setSubscriptionStatus(sub.status);
         setSubscriptionExpiry(sub.expires_at);
-      } else if (!master) {
-        // No subscription found for non-master user
-        setSubscriptionStatus('inactive');
       } else {
-        setSubscriptionStatus('active'); // Masters always active
+        // No subscription found - check if within free 30-day trial period
+        // Use profile created_at or auth user created_at as fallback
+        const { data: { user } } = await supabase.auth.getUser();
+        const createdAtStr = profile?.created_at || user?.created_at;
+        const createdAt = createdAtStr ? new Date(createdAtStr) : null;
+
+        if (createdAt) {
+          const trialEnd = new Date(createdAt);
+          trialEnd.setDate(trialEnd.getDate() + 30);
+          if (new Date() < trialEnd) {
+            setSubscriptionStatus('trialing');
+            setSubscriptionExpiry(trialEnd.toISOString());
+          } else {
+            setSubscriptionStatus('inactive');
+          }
+        } else {
+          // Cannot determine creation date, grant trial access
+          setSubscriptionStatus('trialing');
+        }
       }
     } catch (error) {
       console.error('Error checking subscription:', error);
