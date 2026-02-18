@@ -27,6 +27,8 @@ const ContractSign: React.FC = () => {
     const [signed, setSigned] = useState(false);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [adminSignature, setAdminSignature] = useState<string | null>(null);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [clientSignatureData, setClientSignatureData] = useState<string | null>(null);
 
     useEffect(() => {
         fetchContract();
@@ -87,11 +89,13 @@ const ContractSign: React.FC = () => {
 
         setSigning(true);
 
+        const signedAt = new Date().toISOString();
+
         const { error: updateError } = await supabase
             .from('contracts')
             .update({
                 signature_data: signatureData,
-                signed_at: new Date().toISOString(),
+                signed_at: signedAt,
                 status: 'signed',
             })
             .eq('id', contract.id);
@@ -102,12 +106,72 @@ const ContractSign: React.FC = () => {
             return;
         }
 
+        setClientSignatureData(signatureData);
+        setContract({ ...contract, signature_data: signatureData, signed_at: signedAt, status: 'signed' });
         setSigned(true);
         setShowSignatureModal(false);
         setSigning(false);
+        setShowSuccessModal(true);
+    };
 
-        // Refresh contract data
-        fetchContract();
+    const downloadSignedPDF = () => {
+        if (!contract) return;
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        let content = contract.filled_content || '';
+
+        // Processar tags de assinatura
+        const adminSigRegex = /\[assinatura LOCATARIA\]|\[ASSINATURA LOCATARIA\]|\[assinatura locataria\]/gi;
+        if (adminSignature) {
+            content = content.replace(adminSigRegex, `<img src="${adminSignature}" style="max-height:80px;display:inline-block;border-bottom:2px solid #ccc;margin:8px 4px;" />`);
+        }
+
+        const clientSigRegex = /\[assinatura cliente\]|\[ASSINATURA CLIENTE\]|\[assinatura CLIENTE\]/gi;
+        const sigData = clientSignatureData || contract.signature_data;
+        if (sigData) {
+            content = content.replace(clientSigRegex, `<img src="${sigData}" style="max-height:80px;display:inline-block;border-bottom:2px solid #ccc;margin:8px 4px;" />`);
+        }
+
+        const logoHtml = contract.logo_url ? `<div style="text-align:center;margin-bottom:20px;"><img src="${contract.logo_url}" style="max-height:80px;max-width:200px;" /></div>` : '';
+        const watermarkHtml = contract.watermark_url ? `<img style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:50%;max-width:400px;opacity:0.08;z-index:-1;pointer-events:none;" src="${contract.watermark_url}" />` : '';
+
+        printWindow.document.write(`<!DOCTYPE html><html><head>
+            <title>Contrato - ${contract.client_name}</title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; line-height: 1.6; color: #333; }
+                .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #7c3aed; }
+                .header h1 { color: #7c3aed; margin: 0; }
+                .content { white-space: pre-wrap; }
+                .content img { max-height: 80px; vertical-align: middle; }
+                .signature-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+                .signature-block { display: inline-block; margin-right: 40px; text-align: center; }
+                .signature-block img { max-height: 60px; border-bottom: 2px solid #cbd5e1; }
+                .signature-block p { font-size: 12px; color: #64748b; margin-top: 8px; }
+                .legal { margin-top: 30px; font-size: 11px; color: #94a3b8; text-align: center; }
+                @media print { body { padding: 20px; } }
+            </style>
+        </head><body>
+            ${watermarkHtml}
+            ${logoHtml}
+            <div class="header">
+                <h1>CONTRATO</h1>
+                <p>Cliente: ${contract.client_name} | Tipo: ${contract.type}</p>
+            </div>
+            <div class="content">${content}</div>
+            <div class="signature-section">
+                ${sigData ? `<div class="signature-block"><img src="${sigData}" /><p><strong>${contract.client_name}</strong><br/>Assinado em ${contract.signed_at ? new Date(contract.signed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</p></div>` : ''}
+                ${adminSignature ? `<div class="signature-block"><img src="${adminSignature}" /><p><strong>Empresa</strong></p></div>` : ''}
+            </div>
+            <div class="legal">
+                <p>Documento assinado eletronicamente com validade juridica conforme MP 2.200-2/2001.</p>
+            </div>
+        </body></html>`);
+
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); }, 300);
     };
 
     const formatCurrency = (value: number) => {
@@ -392,12 +456,50 @@ const ContractSign: React.FC = () => {
                 </div>
             )}
 
+            {/* Success Modal */}
+            {showSuccessModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md text-center overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+                        <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 p-8">
+                            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto shadow-xl">
+                                <span className="material-symbols-outlined text-emerald-500 text-5xl">check_circle</span>
+                            </div>
+                        </div>
+                        <div className="p-8">
+                            <h2 className="text-2xl font-black text-slate-900 mb-2">Contrato Assinado!</h2>
+                            <p className="text-slate-500 mb-2">
+                                Obrigado, <strong>{contract?.client_name}</strong>!
+                            </p>
+                            <p className="text-slate-500 text-sm mb-8">
+                                Sua assinatura foi registrada com sucesso. Voce pode baixar uma copia do contrato assinado clicando no botao abaixo.
+                            </p>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={downloadSignedPDF}
+                                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all shadow-xl shadow-purple-500/25"
+                                >
+                                    <span className="material-symbols-outlined text-xl">download</span>
+                                    Baixar Contrato em PDF
+                                </button>
+                                <button
+                                    onClick={() => setShowSuccessModal(false)}
+                                    className="w-full px-6 py-3 text-slate-500 text-sm font-medium hover:text-slate-700 transition-colors"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Footer */}
             <footer className="border-t border-slate-200 bg-white mt-8">
                 <div className="max-w-4xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
-                    <p>Documento digital com validade jurídica</p>
+                    <p>Documento digital com validade juridica</p>
                     <p className="text-xs text-slate-400 mt-1">
-                        Facilita Teoo • Sistema de Gestão de Contratos
+                        Facilita Teoo
                     </p>
                 </div>
             </footer>
