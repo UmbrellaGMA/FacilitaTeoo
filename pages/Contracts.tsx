@@ -713,7 +713,6 @@ const ContractsView: React.FC = () => {
             ...contractData,
             signed_at: null,
             signature_data: null,
-            signer_name: null,
           })
           .eq('id', editingContractId);
         if (error) throw error;
