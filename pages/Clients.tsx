@@ -170,7 +170,8 @@ const Clients: React.FC = () => {
 
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('pt-BR');
+        const normalized = dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00';
+        return new Date(normalized).toLocaleDateString('pt-BR');
     };
 
     const getStatusColor = (status: string) => {

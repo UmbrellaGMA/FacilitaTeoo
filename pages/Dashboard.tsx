@@ -172,7 +172,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
 
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
     const day = date.getDate().toString().padStart(2, '0');
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return { day, month: months[date.getMonth()] };

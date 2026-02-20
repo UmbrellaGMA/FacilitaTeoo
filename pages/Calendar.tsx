@@ -510,13 +510,13 @@ const CalendarView: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {events.slice(0, 5).map((event) => {
-                const eventDate = new Date(event.event_date);
+                const eventDate = new Date(event.event_date + 'T00:00:00');
                 return (
                   <div
                     key={event.id}
                     onClick={() => {
-                      setCurrentDate(new Date(event.event_date));
-                      setSelectedDate(new Date(event.event_date));
+                      setCurrentDate(new Date(event.event_date + 'T00:00:00'));
+                      setSelectedDate(new Date(event.event_date + 'T00:00:00'));
                     }}
                     className="flex gap-4 group cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 p-2 rounded-xl transition-all"
                   >

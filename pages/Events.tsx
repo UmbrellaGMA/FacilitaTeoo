@@ -111,7 +111,7 @@ const Events: React.FC = () => {
     };
 
     const formatFullDate = (dateStr: string) => {
-        const date = new Date(dateStr);
+        const date = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
         return date.toLocaleDateString('pt-BR', {
             weekday: 'long',
             day: '2-digit',
@@ -229,7 +229,7 @@ const Events: React.FC = () => {
     };
 
     const getDaysUntilEvent = (dateStr: string) => {
-        const eventDate = new Date(dateStr);
+        const eventDate = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         eventDate.setHours(0, 0, 0, 0);
@@ -338,10 +338,10 @@ const Events: React.FC = () => {
                                     <div className="flex items-start gap-4">
                                         <div className="w-14 h-14 bg-primary/10 dark:bg-primary/20 rounded-xl flex flex-col items-center justify-center flex-shrink-0">
                                             <span className="text-xs font-bold text-primary uppercase">
-                                                {new Date(event.event_date).toLocaleDateString('pt-BR', { month: 'short' })}
+                                                {new Date(event.event_date + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short' })}
                                             </span>
                                             <span className="text-lg font-bold text-primary">
-                                                {new Date(event.event_date).getDate()}
+                                                {new Date(event.event_date + 'T00:00:00').getDate()}
                                             </span>
                                         </div>
 
@@ -480,7 +480,7 @@ const Events: React.FC = () => {
                                         <span className="material-symbols-outlined text-primary text-2xl mb-1 block">calendar_month</span>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Data</p>
                                         <p className="text-sm font-bold text-slate-900 dark:text-white">
-                                            {new Date(selectedEvent.event_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                            {new Date(selectedEvent.event_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                         </p>
                                     </div>
                                     <div className="bg-slate-50 dark:bg-white/5 p-4 rounded-xl text-center">

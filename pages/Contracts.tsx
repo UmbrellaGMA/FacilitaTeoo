@@ -547,16 +547,27 @@ const ContractsView: React.FC = () => {
       return;
     }
 
+    // Warn if contract was already signed
+    if (contract.status === 'signed' || contract.signed_at) {
+      const confirmed = window.confirm(
+        'Este contrato já foi assinado. Ao editar, a assinatura será invalidada e o cliente precisará assinar novamente.\n\nDeseja continuar?'
+      );
+      if (!confirmed) return;
+    }
+
     setSelectedTemplate(template);
     setTagValues(contract.tag_values || {});
     setSelectedEquipment(contract.selected_equipment || []);
     setCustomEquipmentText(contract.custom_equipment_text || '');
 
     // Set form data
+    const normalizedDate = contract.event_date
+      ? new Date(contract.event_date.includes('T') ? contract.event_date : contract.event_date + 'T00:00:00').toISOString().split('T')[0]
+      : '';
     setNewContractData({
       client_name: contract.client_name,
       type: contract.type,
-      event_date: contract.event_date ? new Date(contract.event_date).toISOString().split('T')[0] : '',
+      event_date: normalizedDate,
       value: contract.value
     });
 
@@ -695,9 +706,15 @@ const ContractsView: React.FC = () => {
       };
 
       if (editingContractId) {
+        // Reset signature when editing a signed contract
         const { error } = await supabase
           .from('contracts')
-          .update(contractData)
+          .update({
+            ...contractData,
+            signed_at: null,
+            signature_data: null,
+            signer_name: null,
+          })
           .eq('id', editingContractId);
         if (error) throw error;
       } else {
@@ -882,7 +899,9 @@ const ContractsView: React.FC = () => {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
     try {
-      const date = new Date(dateStr);
+      // Fix timezone bug: append T00:00:00 to prevent UTC interpretation shifting the day
+      const normalized = dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00';
+      const date = new Date(normalized);
       if (isNaN(date.getTime())) return '-';
       return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
     } catch (e) {
@@ -1905,8 +1924,6 @@ const ContractsView: React.FC = () => {
                 <thead>
                   <tr className="bg-slate-50 dark:bg-white/5 border-b border-[#e2dbe6] dark:border-[#31253a]">
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-[#7c6189] dark:text-purple-200/60">Cliente</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-[#7c6189] dark:text-purple-200/60">Data do Evento</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-[#7c6189] dark:text-purple-200/60">Valor</th>
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-[#7c6189] dark:text-purple-200/60">Status</th>
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-[#7c6189] dark:text-purple-200/60 text-right">Ações</th>
                   </tr>
@@ -1924,12 +1941,6 @@ const ContractsView: React.FC = () => {
                             <p className="text-[10px] font-bold uppercase text-[#7c6189] tracking-tighter">{contract.type}</p>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <p className="text-sm text-slate-900 dark:text-white font-bold">{formatDate(contract.event_date)}</p>
-                      </td>
-                      <td className="px-6 py-5">
-                        <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(contract.value)}</p>
                       </td>
                       <td className="px-6 py-5">
                         {getStatusBadge(contract.status)}

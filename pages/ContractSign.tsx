@@ -182,7 +182,8 @@ const ContractSign: React.FC = () => {
     };
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('pt-BR', {
+        const normalized = dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00';
+        return new Date(normalized).toLocaleDateString('pt-BR', {
             day: '2-digit',
             month: 'long',
             year: 'numeric',
